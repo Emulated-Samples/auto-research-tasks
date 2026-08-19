@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+# Local benchmark scripts
+bench_kernels.py
+
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+sdist/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Sphinx build output
+docs/_build/
+
+# Cherimoya specific
+*.torch
+*.final.torch
+*.log
+
+# Pipeline outputs and temporary parameter files
+*.pipeline.json
+*.fit.json
+*.evaluate.json
+*.attribute.json
+*.marginalize.json
+*.ohe.npz
+*.attr.npz
+*.idx.npy
+*.idxs.npy
+*.performance.tsv
+*.bed
+*.narrowPeak
+*.bw
+*.+.bw
+*.-.bw
+*_modisco_results.h5
+*_modisco/
+*_marginalize/
+/motif_seqlet_count.tsv
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -1,0 +1,132 @@
+{
+    "id": "a5b58145-1b79-4f53-ad05-724505e63780",
+    "task_name": "cheri-triton-training",
+    "trial_name": "cheri-triton-training__FeyqTqD",
+    "trial_uri": "file:///home/ubuntu/jobs/wave/gemini-cheri-triton-training/run/cheri-triton-training__FeyqTqD",
+    "task_id": {
+        "path": "/home/ubuntu/canon/tasks/cheri-triton-training"
+    },
+    "source": null,
+    "task_checksum": "7af888d0638db0d70eb65322cc0bb9a81748e5c69236dcf200f78dbddb3a95bc",
+    "config": {
+        "task": {
+            "path": "/home/ubuntu/canon/tasks/cheri-triton-training",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "cheri-triton-training__FeyqTqD",
+        "trials_dir": "/home/ubuntu/jobs/wave/gemini-cheri-triton-training/run",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 0.0833334,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "opencode",
+            "import_path": null,
+            "model_name": "openrouter/google/gemini-3.7-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "extra_allowed_hosts": [
+                "openrouter.ai"
+            ],
+            "kwargs": {
+                "opencode_config": {
+                    "provider": {
+                        "openrouter": {
+                            "options": {
+                                "extraBody": {
+                                    "provider": {
+                                        "order": [
+                                            "google-vertex"
+                                        ],
+                                        "allow_fallbacks": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "c8dc698b-8b2b-4345-858b-202e1bf95996"
+    },
+    "agent_info": {
+        "name": "opencode",
+        "version": "1.18.18",
+        "model_info": {
+            "name": "google/gemini-3.7-flash",
+            "provider": "openrouter"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 860858,
+        "n_cache_tokens": 683206,
+        "n_output_tokens": 16385,
+        "cost_usd": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0,
+            "deps": 1,
+            "training-kernel": 0
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-19T12:41:17.885658Z",
+    "finished_at": "2026-08-19T12:49:40.117075Z",
+    "environment_setup": {
+        "started_at": "2026-08-19T12:41:17.896762Z",
+        "finished_at": "2026-08-19T12:41:22.518332Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-19T12:41:22.518364Z",
+        "finished_at": "2026-08-19T12:41:36.747337Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-19T12:41:36.747412Z",
+        "finished_at": "2026-08-19T12:49:22.618001Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-19T12:49:23.041025Z",
+        "finished_at": "2026-08-19T12:49:28.711521Z"
+    },
+    "step_results": null
+}

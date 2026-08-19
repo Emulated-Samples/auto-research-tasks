@@ -1,0 +1,17 @@
+{
+    "task": {
+        "path": "tasks/autoresearch-six/sc-svpgsbench__main__from_scratch_svpgs"
+    },
+    "trial_name": "sc-svpgsbench__main__from_scratc__FZA2EjA",
+    "trials_dir": "/home/ubuntu/jobs/ar-opus/sc-svpgsbench__main__from_scratch_svpgs/2026-08-18__10-27-32",
+    "agent": {
+        "name": "claude-code",
+        "model_name": "claude-opus-5",
+        "extra_allowed_hosts": [
+            "api.anthropic.com",
+            "statsig.anthropic.com",
+            "sentry.io"
+        ]
+    },
+    "job_id": "cafa2ec7-d517-4df4-9589-66d026703ff0"
+}

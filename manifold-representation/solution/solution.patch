@@ -1,0 +1,730 @@
+diff --git a/workspace/submission/fit b/workspace/submission/fit
+new file mode 100755
+index 0000000..dd0173c
+--- /dev/null
++++ b/workspace/submission/fit
+@@ -0,0 +1,33 @@
++#!/usr/bin/env python3
++"""Reference solution `fit`: learn the block-structured factorization.
++
++Runs the vendored deterministic reference pipeline (spectral subspace +
++symmetric FastICA + isolation-band grouping + ridge-refined additive decoder)
++on the unlabeled training observations and persists the learned model for
++`transform`. Model size and sparsity are inferred from the data and the public
++`max_features` bound only, per the program contract.
++"""
++
++import json
++import pickle
++from pathlib import Path
++
++import numpy as np
++
++from reference_bsf import fit_bsf_reference
++
++MODEL_FILE = "model.pkl"
++
++
++def main() -> None:
++    run_dir = Path.cwd()
++    config = json.loads((run_dir / "config.json").read_text())
++    with np.load(run_dir / "train.npz", allow_pickle=False) as archive:
++        x = np.asarray(archive["x"], dtype=np.float64)
++    model = fit_bsf_reference(x, int(config["max_features"]))
++    with open(run_dir / MODEL_FILE, "wb") as handle:
++        pickle.dump(model, handle, protocol=pickle.HIGHEST_PROTOCOL)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/workspace/submission/reference_bsf.py b/workspace/submission/reference_bsf.py
+new file mode 100644
+index 0000000..89efab7
+--- /dev/null
++++ b/workspace/submission/reference_bsf.py
+@@ -0,0 +1,633 @@
++"""Private simulator oracle and learned calibration reference.
++
++The gold prediction is the simulator's exact factor-block decomposition: every
++factor contribution is a signed vector code decoded through its private
++isometric frame. It audits the metric ceiling, but production normalization is
++set from the learned reference and oracle ceiling below.
++
++The learned reference discovers structure from ``x`` and the public
++``max_features`` bound alone, by the recipe ``docs/REFERENCE_CEILING.md``
++committed to before it was implemented:
++
++- **Axis discovery the way the frontier does it.** The signal subspace is read
++  off the spectrum against a null-band noise estimate, whitened, and rotated by
++  symmetric FastICA. Every v12 Opus rollout independently derived this stage
++  and beat the old torch-trained reference with it on eight of nine suites.
++- **Grouping the way the frontier does not.** Axes are grouped into objects by
++  co-activation restricted to the observable low-energy near-singleton band.
++  On a row carrying one factor, every active axis belongs to that factor, so
++  band co-activation is direct same-object evidence -- and it is immune to the
++  habitual co-firing that makes co-support clustering collapse on
++  ``correlated_supports`` (frontier recovery 0.000/0.035/0.194 across three
++  cohorts). This is the shipped isolation principle, moved from a training
++  loss into the grouping evidence itself. In the language of independent
++  subspace analysis: near-singleton anchor rows are the pure-row evidence that
++  makes subspace-to-factor assignment identifiable when plain co-occurrence
++  statistics are confounded by correlated supports.
++
++A block's rank is the size of its evidence group, so no constant ties every
++object to one width: ``neural_hybrid``'s chart_dim-4 factors and the analytic
++zoo's rank-2 curves stop sharing a compromise. The fit is a deterministic
++spectral pipeline -- no stochastic optimizer -- which collapsed the cross-seed
++recovery spread that used to bind the min-over-twelve targets (core_balanced
++sd 0.107 -> 0.010 at 12 calibration replicates; the measured grid is committed
++at ``rollout_analysis/artifacts/ica_candidate_12rep_probes.tar.gz``).
++
++Held-out inference is unchanged from the previous reference: encoder routing is
++compared with a decoder-side matching-pursuit support gated by each block's
++distance to its own conditional code atlas, selected blocks are jointly refit,
++and codes are denoised with local-linear atlas charts. The public task never
++names or exposes either construction.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++import numpy as np
++
++# Vendored for the reference solution: the grader's Prediction contract,
++# restated locally so the submission is self-contained (the run directory has
++# no grader package on sys.path).
++
++
++@dataclass(frozen=True)
++class Prediction:
++    reconstruction: "np.ndarray"
++    presence: "np.ndarray"
++    contributions: "np.ndarray"
++    bias: "np.ndarray"
++
++
++# Bounded exemplar budget for the pursuit's evidence gate.  The gate only needs
++# a distance to the block's code cloud, which a deterministic subsample of the
++# cloud estimates well, and the bound keeps inference inside the public limits.
++ATLAS_EVIDENCE_EXEMPLARS = 96
++
++# Row-energy quantile band holding the observable near-isolated rows. These
++# regimes contain single-factor rows (variable support alone would not force
++# them; the low-energy tail here does), observable without
++# labels as the low-energy band above the nulls; both ends are read from the
++# data's own energy distribution, never from a factor count. The old torch
++# reference used this band as a training-loss constraint; the current fit uses
++# it as the grouping evidence directly, which is the stronger use of the same
++# observable fact.
++ISOLATION_BAND = (0.045, 0.30)
++
++# Rows below this energy quantile are treated as nulls: variable-support data
++# contains explicit no-factor rows, and their coordinates estimate per-axis
++# noise levels without labels.
++NULL_QUANTILE = 0.06
++
++# An axis counts as active when its |code| exceeds this multiple of its own
++# null-row scale -- a standard multiple-comparison margin, not a fitted value.
++ACTIVATION_SIGMA = 4.0
++
++# Two axes may merge into one object only while their singleton-band overlap
++# distance stays below this; the object count itself is chosen by the largest
++# dendrogram gap, not by a fixed cut.
++MAX_MERGE_DISTANCE = 0.80
++
++# The energy band is not pure singletons: a row carrying two dim factors lands
++# in it, and its co-activation links distinct factors' axes. Such rows are
++# observable without labels -- they activate roughly twice as many axes as a
++# true singleton -- so the band is purified by per-row active-axis count before
++# any affinity is measured. A band row may activate at most this multiple of
++# the band's median positive activation count. Measured on 36 extended
++# long_tail calibration draws, the impurity is what produced a fat left tail
++# in the seed distribution (worst draw: 16 blocks for 20 factors, merging
++# 0.122, recovery 0.570).
++BAND_PURITY_FACTOR = 1.5
++
++# Eigendirections must carry at least this multiple of the null-estimated noise
++# variance to enter the signal subspace. Swept globally at {2.0, 2.5, 3.0} x
++# 12 replicates x 9 calibration suites on the statistic that becomes targets
++# (per-suite MIN recovery). 2.5 wins pooled (7.154 vs 7.087 at 2.0 and 7.011
++# at 3.0) and specifically holds correlated_supports' worst witness at 0.803
++# where 2.0 drops it to 0.682 -- that suite is the one regime the frontier
++# consistently fails, so its target strength is worth more than the extra
++# noisy_amplitudes headroom 2.0 buys. Not a per-suite pick: one value ships
++# everywhere, chosen on the pooled result.
++SIGNAL_OVER_NOISE = 2.5
++
++
++@dataclass(frozen=True)
++class LearnedBSF:
++    center: np.ndarray
++    scale: float
++    encoder: np.ndarray
++    decoder: np.ndarray
++    training_active_blocks: int
++    max_active_blocks: int
++    gain_threshold: float
++    atlas_codes: tuple[np.ndarray, ...]
++
++
++def _numpy_route(
++    x: np.ndarray, encoder: np.ndarray, active_blocks: int
++) -> tuple[np.ndarray, np.ndarray]:
++    codes = np.einsum("nd,dgb->ngb", x, encoder, optimize=True)
++    energies = np.sum(codes * codes, axis=2)
++    n_blocks = encoder.shape[1]
++    indices = np.argpartition(energies, n_blocks - active_blocks, axis=1)[:, -active_blocks:]
++    mask = np.zeros_like(energies, dtype=bool)
++    mask[np.arange(x.shape[0])[:, None], indices] = True
++    return codes, mask
++
++
++def _masked_codes(codes: np.ndarray, mask: np.ndarray) -> np.ndarray:
++    return (codes * mask[:, :, None]).reshape(codes.shape[0], -1)
++
++
++def _refine_decoder(
++    x: np.ndarray,
++    encoder: np.ndarray,
++    active_blocks: int,
++    block_size: int,
++    ridge: float = 0.08,
++) -> np.ndarray:
++    """Fit the optimal additive decoder for the learned routed coordinates.
++
++    The refit ridge matches the inference-time matching-pursuit and joint-refit
++    regularization (also 0.08).  A much weaker penalty let the least-squares
++    decoder overfit the routed codes, yielding atoms that straddle several
++    factors; unifying the scale sharpens per-block factor alignment.
++    """
++    codes, mask = _numpy_route(x, encoder, active_blocks)
++    design = _masked_codes(codes, mask)
++    gram = design.T @ design
++    penalty = ridge * max(float(np.trace(gram)) / max(gram.shape[0], 1), 1e-8)
++    decoder = np.linalg.solve(
++        gram + penalty * np.eye(gram.shape[0], dtype=np.float64), design.T @ x
++    )
++    return decoder.reshape(encoder.shape[1], block_size, x.shape[1])
++
++
++def _contribution_distances(
++    queries: np.ndarray, exemplars: np.ndarray, decoder: np.ndarray
++) -> np.ndarray:
++    """Squared distances after decoding block coordinates into activation space."""
++    metric = decoder @ decoder.T
++    delta = queries[:, None, :] - exemplars[None, :, :]
++    return np.einsum("nmb,bc,nmc->nm", delta, metric, delta, optimize=True)
++
++
++def _fit_block_atlases(
++    x: np.ndarray,
++    encoder: np.ndarray,
++    active_blocks: int,
++) -> tuple[np.ndarray, ...]:
++    """Fit empirical manifold charts to each routed block's conditional codes.
++
++    The reference deliberately retains the observed code clouds instead of
++    assigning a circle, sphere, or other named topology.  Distances use the
++    learned decoder's pullback metric, so they measure displacement of the
++    additive contribution rather than an arbitrary encoder coordinate scale.
++    """
++    codes, mask = _numpy_route(x, encoder, active_blocks)
++    atlases: list[np.ndarray] = []
++    for block in range(encoder.shape[1]):
++        values = np.asarray(codes[mask[:, block], block], dtype=np.float64)
++        atlases.append(values)
++    return tuple(atlases)
++
++
++def _project_to_block_atlases(
++    codes: np.ndarray,
++    mask: np.ndarray,
++    decoder: np.ndarray,
++    atlases: tuple[np.ndarray, ...],
++    blend: float = 0.50,
++) -> np.ndarray:
++    """Denoise routed codes with conditional local-linear manifold charts.
++
++    Routing has already handled explaining-away jointly through the learned
++    encoder.  Each selected code is projected toward the affine tangent of its
++    nearest conditional-code neighborhood.  The tangent rank is inferred from
++    local variance, and a conservative blend avoids forcing genuinely
++    full-dimensional factors into a lower-dimensional model.
++    """
++    projected = codes.copy()
++    for block, exemplars in enumerate(atlases):
++        rows = mask[:, block]
++        if not np.any(rows) or len(exemplars) < 8:
++            continue
++        queries = codes[rows, block]
++        distances = _contribution_distances(queries, exemplars, decoder[block])
++        neighbor_count = min(24, len(exemplars))
++        neighbor_indices = np.argpartition(distances, neighbor_count - 1, axis=1)[
++            :, :neighbor_count
++        ]
++        neighborhoods = exemplars[neighbor_indices]
++        centers = neighborhoods.mean(axis=1)
++        local = neighborhoods - centers[:, None, :]
++        _, singular, right = np.linalg.svd(local, full_matrices=False)
++        estimates = np.empty_like(queries)
++        for row in range(len(queries)):
++            energy = singular[row] * singular[row]
++            cumulative = np.cumsum(energy) / max(float(np.sum(energy)), 1e-12)
++            rank = min(len(energy), max(1, int(np.searchsorted(cumulative, 0.94)) + 1))
++            basis = right[row, :rank]
++            offset = queries[row] - centers[row]
++            estimates[row] = centers[row] + offset @ basis.T @ basis
++        projected[rows, block] = (1.0 - blend) * queries + blend * estimates
++    return projected
++
++
++def _joint_residual_refit(
++    x: np.ndarray,
++    codes: np.ndarray,
++    mask: np.ndarray,
++    decoder: np.ndarray,
++    step_size: float = 0.10,
++    ridge: float = 0.08,
++) -> np.ndarray:
++    """Share unexplained residual across each row's selected blocks jointly.
++
++    This is a single stable explaining-away step, not an independent marginal
++    projection.  Grouping identical support patterns keeps the small ridge
++    systems cheap on CPU.
++    """
++    refined = codes.copy()
++    reconstruction = np.einsum("ngb,gbd->nd", codes * mask[:, :, None], decoder, optimize=True)
++    residual = x - reconstruction
++    supports, inverse = np.unique(mask, axis=0, return_inverse=True)
++    for support_index, support in enumerate(supports):
++        rows = inverse == support_index
++        blocks = np.flatnonzero(support)
++        if not np.any(rows) or len(blocks) == 0:
++            continue
++        atoms = decoder[blocks].reshape(-1, decoder.shape[2])
++        gram = atoms @ atoms.T
++        penalty = ridge * max(float(np.trace(gram)) / len(gram), 1e-8)
++        correction = np.linalg.solve(
++            gram + penalty * np.eye(len(gram), dtype=np.float64),
++            atoms @ residual[rows].T,
++        ).T
++        refined[np.ix_(rows, blocks)] += step_size * correction.reshape(
++            rows.sum(), len(blocks), decoder.shape[1]
++        )
++    return refined
++
++
++def _greedy_block_support(
++    x: np.ndarray,
++    decoder: np.ndarray,
++    max_active_blocks: int,
++    min_gain: float = -np.inf,
++    ridge: float = 0.08,
++    atlases: tuple[np.ndarray, ...] | None = None,
++) -> np.ndarray:
++    """Construct a row-adaptive support by residual block matching pursuit.
++
++    A block's gain is discounted by how far its implied code lands from that
++    block's own conditional code cloud.  Pure norm gating accepts any block whose
++    span happens to absorb residual energy; requiring the code to also lie near
++    the block's learned manifold stops the pursuit from claiming blocks that fit
++    the magnitude but not the geometry.
++    """
++    n_blocks = decoder.shape[0]
++    inverses: list[np.ndarray] = []
++    shells: list[tuple[np.ndarray, float] | None] = []
++    for block in range(n_blocks):
++        atoms = decoder[block]
++        gram = atoms @ atoms.T
++        penalty = ridge * max(float(np.trace(gram)) / len(gram), 1e-8)
++        inverses.append(
++            np.linalg.solve(gram + penalty * np.eye(len(gram), dtype=np.float64), atoms)
++        )
++        # Precompute each block's evidence shell once.  A bounded, deterministic
++        # stride keeps the pursuit's per-step cost independent of the train size.
++        exemplars = None if atlases is None else atlases[block]
++        if exemplars is None or len(exemplars) < 8:
++            shells.append(None)
++            continue
++        stride = max(1, len(exemplars) // ATLAS_EVIDENCE_EXEMPLARS)
++        sample = np.ascontiguousarray(exemplars[::stride][:ATLAS_EVIDENCE_EXEMPLARS])
++        radius = float(np.median(np.linalg.norm(sample, axis=1))) ** 2
++        shells.append((sample, max(radius, 1e-8)))
++    residual = x.copy()
++    mask = np.zeros((len(x), n_blocks), dtype=bool)
++    active_rows = np.ones(len(x), dtype=bool)
++    for _ in range(max_active_blocks):
++        gains = np.empty((len(x), n_blocks), dtype=np.float64)
++        candidates: list[np.ndarray] = []
++        for block in range(n_blocks):
++            code = residual @ inverses[block].T
++            contribution = code @ decoder[block]
++            candidates.append(contribution)
++            gain = 2.0 * np.sum(residual * contribution, axis=1) - np.sum(
++                contribution * contribution, axis=1
++            )
++            shell = shells[block]
++            if shell is not None:
++                sample, radius = shell
++                offset = _contribution_distances(code, sample, decoder[block]).min(axis=1)
++                gain -= np.sum(contribution * contribution, axis=1) * np.clip(
++                    offset / radius, 0.0, 1.0
++                )
++            gains[:, block] = gain
++        gains[mask] = -np.inf
++        selected = np.argmax(gains, axis=1)
++        best = gains[np.arange(len(x)), selected]
++        accepting = active_rows & (best > min_gain)
++        if not np.any(accepting):
++            break
++        accepted_rows = np.flatnonzero(accepting)
++        mask[accepted_rows, selected[accepting]] = True
++        for block, contribution in enumerate(candidates):
++            rows = accepting & (selected == block)
++            residual[rows] -= contribution[rows]
++        active_rows &= accepting
++    return mask
++
++
++def _refit_candidate(
++    x: np.ndarray,
++    codes: np.ndarray,
++    mask: np.ndarray,
++    decoder: np.ndarray,
++) -> tuple[np.ndarray, np.ndarray]:
++    """Jointly refit one support proposal and return its rowwise error."""
++    refined = _joint_residual_refit(x, codes, mask, decoder)
++    contributions = np.einsum("ngb,gbd->ngd", refined * mask[:, :, None], decoder, optimize=True)
++    error = np.sum((x - contributions.sum(axis=1)) ** 2, axis=1)
++    return refined, error
++
++
++def _deterministic_signs(rotation: np.ndarray) -> np.ndarray:
++    """Fix each column's sign so equivalent BLAS results agree across hosts."""
++    signs = np.sign(rotation[np.argmax(np.abs(rotation), axis=0), np.arange(rotation.shape[1])])
++    signs[signs == 0.0] = 1.0
++    return rotation * signs
++
++
++def _signal_subspace(normalized: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
++    """Right singular directions carrying more variance than the noise floor.
++
++    The noise floor is read from the data's own null band: variable-support
++    sampling includes rows with no active factor, and the lowest-energy rows
++    estimate the per-coordinate noise variance without labels.
++    """
++    n, d = normalized.shape
++    _, singular, right = np.linalg.svd(normalized, full_matrices=False)
++    variances = (singular * singular) / max(n - 1, 1)
++    row_energy = np.sum(normalized * normalized, axis=1)
++    null_count = max(8, round(NULL_QUANTILE * n))
++    null_energy = float(np.median(np.partition(row_energy, null_count - 1)[:null_count]))
++    noise_variance = max(null_energy / d, 1e-12)
++    keep = variances > SIGNAL_OVER_NOISE * noise_variance
++    rank = int(np.count_nonzero(keep))
++    rank = max(2, min(rank, d, n - 1))
++    return right[:rank], np.sqrt(variances[:rank])
++
++
++def _fastica_rotation(whitened: np.ndarray, seed: int) -> np.ndarray:
++    """Symmetric tanh FastICA returning an orthogonal rotation of the axes.
++
++    Sparse per-object activation makes each true axis heavy-tailed, which is
++    the non-Gaussianity this stage keys on.  Axes of one curved object remain
++    mutually dependent and are deliberately not torn apart here; separating
++    objects from each other is the grouping stage's job, not the rotation's.
++    """
++    n, width = whitened.shape
++    if width == 1:
++        return np.ones((1, 1))
++    rng = np.random.default_rng(seed)
++    rotation, _ = np.linalg.qr(rng.standard_normal((width, width)))
++    for _ in range(300):
++        projected = whitened @ rotation
++        score = np.tanh(projected)
++        derivative = 1.0 - score * score
++        update = (whitened.T @ score) / n - rotation * derivative.mean(axis=0)[None, :]
++        left, _, right_rot = np.linalg.svd(update, full_matrices=False)
++        update = left @ right_rot
++        drift = np.max(np.abs(np.abs(np.sum(update * rotation, axis=0)) - 1.0))
++        rotation = update
++        if drift < 1e-5:
++            break
++    return _deterministic_signs(rotation)
++
++
++def _axis_activations(codes: np.ndarray, null_rows: np.ndarray) -> np.ndarray:
++    """Boolean activation per (row, axis) from each axis's own null-row scale."""
++    null_scale = 1.4826 * np.median(np.abs(codes[null_rows]), axis=0)
++    floor = 0.05 * np.median(np.abs(codes), axis=0)
++    thresholds = ACTIVATION_SIGMA * np.maximum(null_scale, np.maximum(floor, 1e-9))
++    return np.abs(codes) > thresholds[None, :]
++
++
++def _isolation_affinity(active: np.ndarray, band_rows: np.ndarray) -> np.ndarray:
++    """Overlap coefficient of axis activations restricted to the singleton band.
++
++    On a row carrying one factor, every active axis belongs to that factor, so
++    band co-activation is direct same-object evidence.  Habitual co-firing of
++    distinct factors lives in the multi-factor rows, which this affinity never
++    consults -- the evidence split that keeps grouping correct on
++    ``correlated_supports`` while co-support clustering collapses there.
++    """
++    banded = active[band_rows].astype(np.float64)
++    counts = banded.sum(axis=0)
++    joint = banded.T @ banded
++    smaller = np.minimum(counts[:, None], counts[None, :])
++    return joint / np.maximum(smaller, 1.0)
++
++
++def _average_linkage_groups(affinity: np.ndarray, evidence: np.ndarray, cap: int) -> np.ndarray:
++    """Group axes by average-linkage over isolation distance, gap-cut adaptively.
++
++    Axes of one object merge at small distance; distinct objects merge only far
++    higher, so the object count is the largest gap in the merge heights rather
++    than a tuned threshold. ``MAX_MERGE_DISTANCE`` bounds how loose an in-object
++    merge may be, and axes without singleton-band evidence stay singletons
++    rather than being swept into whichever cluster is nearest.
++    """
++    from scipy.cluster.hierarchy import fcluster, linkage
++    from scipy.spatial.distance import squareform
++
++    width = affinity.shape[0]
++    if width == 1:
++        return np.zeros(1, dtype=int)
++    distance = 1.0 - np.clip(affinity, 0.0, 1.0)
++    # Evidence-free axes carry no isolation signal; pin them apart explicitly.
++    weak = ~evidence
++    distance[weak, :] = 1.0
++    distance[:, weak] = 1.0
++    distance = np.clip((distance + distance.T) / 2.0, 0.0, 1.0)
++    np.fill_diagonal(distance, 0.0)
++    merged = linkage(squareform(distance, checks=False), method="average")
++    heights = merged[:, 2]
++    cap = int(max(1, min(cap, width)))
++    best_gap, best_count = -1.0, min(cap, width)
++    for count in range(1, cap + 1):
++        inside = heights[width - 1 - count] if count < width else 0.0
++        outside = heights[width - count] if width - count < len(heights) else 1.0
++        if inside >= MAX_MERGE_DISTANCE:
++            continue
++        gap = outside - inside
++        if gap > best_gap:
++            best_gap, best_count = gap, count
++    labels = fcluster(merged, t=best_count, criterion="maxclust") - 1
++    order = np.unique(labels)
++    remap = {int(old): new for new, old in enumerate(order)}
++    return np.array([remap[int(label)] for label in labels], dtype=int)
++
++
++def _infer_active_blocks(centered: np.ndarray, max_features: int) -> int:
++    """Infer a typical support size from the unlabeled row-energy distribution."""
++    energy = np.sum(centered * centered, axis=1)
++    clipped = np.minimum(energy, np.quantile(energy, 0.95))
++    estimate = int(np.rint(np.mean(clipped)))
++    generic_cap = max(3, round(np.sqrt(centered.shape[1])))
++    return int(np.clip(estimate, 2, min(generic_cap, max_features - 1)))
++
++
++def _noise_calibrated_gain_threshold(
++    normalized: np.ndarray,
++    decoder: np.ndarray,
++) -> float:
++    """Multiple-comparison threshold estimated from the lowest-energy rows.
++
++    Null observations are part of the public data distribution.  Their lower
++    tail provides a label-free estimate of spurious block-projection gain; the
++    logarithmic factor accounts for selecting the best of several blocks.
++    """
++    row_energy = np.sum(normalized * normalized, axis=1)
++    count = max(12, round(0.06 * len(row_energy)))
++    null_energy = float(np.median(np.partition(row_energy, count - 1)[:count]))
++    block_fraction = decoder.shape[1] / decoder.shape[2]
++    multiplicity = 1.0 + 2.0 * np.sqrt(np.log(max(decoder.shape[0], 2)) / max(decoder.shape[1], 1))
++    return max(1e-7, null_energy * block_fraction * multiplicity)
++
++
++def fit_bsf_reference(x: np.ndarray, max_features: int) -> LearnedBSF:
++    """Fit using exactly the information available to a submitted learner."""
++    values = np.asarray(x, dtype=np.float64)
++    if values.ndim != 2 or len(values) < 2 or max_features < 2:
++        raise ValueError("reference fit requires a nontrivial matrix and feature bound")
++    center = values.mean(axis=0)
++    centered = values - center
++    scale = max(float(np.sqrt(np.mean(np.sum(centered * centered, axis=1)))), 1e-8)
++    normalized = centered / scale
++
++    directions, spread = _signal_subspace(normalized)
++    coords = normalized @ directions.T
++    whitened = coords / np.maximum(spread, 1e-9)[None, :]
++    public_seed = 17_171 + 101 * values.shape[0] + 1_009 * values.shape[1] + 10_007 * max_features
++    rotation = _fastica_rotation(whitened, public_seed)
++    codes = whitened @ rotation
++
++    row_energy = np.sum(normalized * normalized, axis=1)
++    null_cut = np.quantile(row_energy, NULL_QUANTILE)
++    lower, upper = np.quantile(row_energy, ISOLATION_BAND)
++    null_rows = row_energy <= null_cut
++    band_rows = (row_energy >= lower) & (row_energy <= upper)
++
++    active = _axis_activations(codes, null_rows)
++    # Purify the band before measuring any affinity: rows activating far more
++    # axes than a typical band row carry more than one factor, and their
++    # co-activation is exactly the cross-factor evidence this grouping must not
++    # consume. The threshold is read from the band's own activation counts.
++    band_index = np.flatnonzero(band_rows)
++    band_activation_counts = active[band_index].sum(axis=1)
++    positive = band_activation_counts[band_activation_counts > 0]
++    if positive.size >= 24:
++        limit = np.ceil(BAND_PURITY_FACTOR * float(np.median(positive)))
++        purified = band_index[
++            (band_activation_counts > 0) & (band_activation_counts <= limit)
++        ]
++        if len(purified) >= 24:
++            band_rows = np.zeros_like(band_rows)
++            band_rows[purified] = True
++    band_counts = active[band_rows].sum(axis=0)
++    evidence = band_counts >= 4
++    affinity = _isolation_affinity(active, band_rows)
++    labels = _average_linkage_groups(affinity, evidence, cap=max_features - 1)
++
++    # Ambient direction set per group: the ICA axes' decoder rows, orthonormalized
++    # so a block is a plain subspace frame and routing energies share one metric.
++    # Blocks carry their group's own rank; narrower blocks are zero-padded.
++    mixing = (rotation.T * spread[:, None]) @ directions
++    groups = [np.flatnonzero(labels == group) for group in range(labels.max() + 1)]
++    frames: list[np.ndarray] = []
++    for axes in groups:
++        q, _ = np.linalg.qr(mixing[axes].T)
++        frames.append(_deterministic_signs(q).T)
++    block_size = max(frame.shape[0] for frame in frames)
++    n_blocks = len(frames)
++    encoder = np.zeros((values.shape[1], n_blocks, block_size), dtype=np.float64)
++    decoder = np.zeros((n_blocks, block_size, values.shape[1]), dtype=np.float64)
++    for index, frame in enumerate(frames):
++        encoder[:, index, : frame.shape[0]] = frame.T
++        decoder[index, : frame.shape[0], :] = frame
++
++    training_active_blocks = min(
++        _infer_active_blocks(centered, max_features), max(n_blocks - 1, 1)
++    )
++    decoder = _refine_decoder(normalized, encoder, training_active_blocks, block_size)
++    max_active_blocks = min(
++        max_features - 1, max(4, round(np.sqrt(values.shape[1])) + 1), n_blocks
++    )
++    atlas_codes = _fit_block_atlases(normalized, encoder, training_active_blocks)
++    gain_threshold = _noise_calibrated_gain_threshold(normalized, decoder)
++    return LearnedBSF(
++        center=center,
++        scale=scale,
++        encoder=encoder,
++        decoder=decoder,
++        training_active_blocks=training_active_blocks,
++        max_active_blocks=max_active_blocks,
++        gain_threshold=gain_threshold,
++        atlas_codes=atlas_codes,
++    )
++
++
++def transform_bsf_reference(model: LearnedBSF, x: np.ndarray) -> Prediction:
++    values = np.asarray(x, dtype=np.float64)
++    normalized = (values - model.center) / model.scale
++    codes, mask = _numpy_route(
++        normalized,
++        model.encoder,
++        model.training_active_blocks,
++    )
++    refined, error = _refit_candidate(normalized, codes, mask, model.decoder)
++    greedy_mask = _greedy_block_support(
++        normalized,
++        model.decoder,
++        model.max_active_blocks,
++        model.gain_threshold,
++        atlases=model.atlas_codes,
++    )
++    greedy_refined, greedy_error = _refit_candidate(
++        normalized, codes, greedy_mask, model.decoder
++    )
++    encoder_score = error + model.gain_threshold * mask.sum(axis=1)
++    greedy_score = greedy_error + model.gain_threshold * greedy_mask.sum(axis=1)
++    use_greedy = greedy_score < 0.98 * encoder_score
++    refined[use_greedy] = greedy_refined[use_greedy]
++    mask[use_greedy] = greedy_mask[use_greedy]
++    refined = _project_to_block_atlases(
++        refined,
++        mask,
++        model.decoder,
++        model.atlas_codes,
++    )
++    contributions = np.einsum(
++        "ngb,gbd->ngd",
++        refined * mask[:, :, None],
++        model.decoder,
++        optimize=True,
++    )
++    contributions *= model.scale
++    reconstruction = model.center + contributions.sum(axis=1)
++    norms = np.linalg.norm(contributions, axis=2)
++    selected = norms > np.maximum(1e-8, 1e-5 * np.max(norms, axis=1, keepdims=True))
++    # A fixed support margin makes presence calibratable across splits; the
++    # bounded norm term retains a meaningful within-support ranking.
++    presence = selected * (1.0 + norms / (1.0 + norms))
++    return Prediction(
++        reconstruction=reconstruction,
++        presence=presence,
++        contributions=contributions,
++        bias=model.center,
++    )
+diff --git a/workspace/submission/transform b/workspace/submission/transform
+new file mode 100755
+index 0000000..6f739e0
+--- /dev/null
++++ b/workspace/submission/transform
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Reference solution `transform`: deterministic out-of-sample inference.
++
++Loads the model persisted by `fit` (each call starts from the same artifact),
++routes `eval.npz` rows through the learned encoder/decoder, and writes the
++predictions archive named by config.json's `predictions_file` with exactly the
++contract members: reconstruction, presence, contributions, bias. Row-order and
++batch-context independent by construction (pure per-row linear algebra from
++persisted state).
++"""
++
++import json
++import pickle
++from pathlib import Path
++
++import numpy as np
++
++from reference_bsf import transform_bsf_reference
++
++MODEL_FILE = "model.pkl"
++
++
++def main() -> None:
++    run_dir = Path.cwd()
++    config = json.loads((run_dir / "config.json").read_text())
++    with open(run_dir / MODEL_FILE, "rb") as handle:
++        model = pickle.load(handle)
++    with np.load(run_dir / "eval.npz", allow_pickle=False) as archive:
++        x = np.asarray(archive["x"], dtype=np.float64)
++    prediction = transform_bsf_reference(model, x)
++    out = run_dir / str(config["predictions_file"])
++    np.savez(
++        out,
++        reconstruction=prediction.reconstruction,
++        presence=prediction.presence,
++        contributions=prediction.contributions,
++        bias=prediction.bias,
++    )
++    # np.savez appends ".npz" when absent; normalize to the contract name.
++    written = out if out.exists() else out.with_suffix(out.suffix + ".npz")
++    if written != out:
++        written.rename(out)
++
++
++if __name__ == "__main__":
++    main()

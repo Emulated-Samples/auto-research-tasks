@@ -1,0 +1,38 @@
+{
+  "failClosed": false,
+  "erroredHandling": "exclude-errored",
+  "erroredTestIds": [],
+  "skippedTestIds": [],
+  "weights": {
+    "pytest-test_heldout_Dev": 0.9,
+    "pytest-test_invalid_args_raise[bad0]": 0.00625,
+    "pytest-test_invalid_args_raise[bad1]": 0.00625,
+    "pytest-test_invalid_args_raise[bad2]": 0.00625,
+    "pytest-test_invalid_args_raise[bad3]": 0.00625,
+    "pytest-test_invalid_args_raise[bad4]": 0.00625,
+    "pytest-test_invalid_args_raise[bad5]": 0.00625,
+    "pytest-test_invalid_args_raise[bad6]": 0.00625,
+    "pytest-test_invalid_args_raise[bad7]": 0.00625,
+    "cat-design-under-workspace": 0,
+    "cat-no-pypi-reshadow": 0,
+    "cat-evaluator-not-in-workspace": 0,
+    "cat-determinism": 0
+  },
+  "statuses": {
+    "pytest-test_heldout_Dev": "passed",
+    "pytest-test_invalid_args_raise[bad0]": "passed",
+    "pytest-test_invalid_args_raise[bad1]": "passed",
+    "pytest-test_invalid_args_raise[bad2]": "passed",
+    "pytest-test_invalid_args_raise[bad3]": "passed",
+    "pytest-test_invalid_args_raise[bad4]": "passed",
+    "pytest-test_invalid_args_raise[bad5]": "passed",
+    "pytest-test_invalid_args_raise[bad6]": "passed",
+    "pytest-test_invalid_args_raise[bad7]": "passed",
+    "cat-design-under-workspace": "passed",
+    "cat-no-pypi-reshadow": "passed",
+    "cat-evaluator-not-in-workspace": "passed",
+    "cat-determinism": "passed"
+  },
+  "generatedAt": "2026-08-19T12:51:45.039Z",
+  "generator": "env-base/harbor/rewards"
+}

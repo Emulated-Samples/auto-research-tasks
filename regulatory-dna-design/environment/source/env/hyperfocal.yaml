@@ -1,0 +1,38 @@
+# Hyperfocal Environment Configuration
+# This file configures the env-orchestrator for rollouts and local testing.
+
+version: "1.0"
+
+environment:
+  name: grelu-test
+  description: ""  # TODO: Add description
+
+# Path configuration for EC2 instances
+# These paths are relative to paths.root
+paths:
+  root: /hyperfocal/env
+  environmentDist: environment/dist
+  workspace: workspace
+
+# Agent configuration
+agent:
+  # Whether the agent should have AWS access
+  # Set to true if your environment needs to deploy AWS resources
+  awsAccess: false
+  # Model is configured by env-orchestrator defaults
+  # Uncomment to override: defaultModel: claude-sonnet-4-20250514
+
+# Compute requirements — DERIVED EMPIRICALLY. grelu-test grades on CPU (no gpus):
+# requirements-solve.txt / requirements-test.txt both pin torch==2.8.0+cpu, all 56
+# platform DB runs ran compute.gpus==0, and the seq-design prompt states
+# "Everything runs on CPU". memoryMb 16384 gives headroom over the 8GB c5.xlarge
+# calibration runs for the heavy genomics grade closure (enformer/torch/sklearn).
+# See docs/12-packaging/02-envs/13-grelu-test.md.
+compute:
+  cpus: 4
+  memoryMb: 16384
+
+# verifierTimeoutSec raised from the 900s default: heavy torch/enformer CPU grade
+# closure (whole-run p90 ~76 min in calibration).
+packaging:
+  verifierTimeoutSec: 3600

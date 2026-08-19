@@ -1,0 +1,11 @@
+{
+  "firstStartTime": "2026-08-18T16:03:40.048Z",
+  "machineID": "e76db5cbd4e0adb5aa10fa43f9f5205b2f14c92655582e5da16fc4316d3dac34",
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "seenNotifications": {},
+  "hasResetAutoModeOptInForDefaultOffer": true,
+  "migrationVersion": 13,
+  "userID": "c1bf5a366b68a9c30ecb2a4f6f5259fe09a8e80bb41d35cbeeac888048f739f0",
+  "cachedExtraUsageDisabledReason": "org_level_disabled"
+}

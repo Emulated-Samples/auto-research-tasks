@@ -1,0 +1,37 @@
+{
+    "schema_version": 1,
+    "task": {
+        "name": "regulatory-dna-design",
+        "type": "local",
+        "digest": "sha256:7b884611db61dfb2d23afd2f46e00a401326910f4342b6092d0da0a85cd4cfdb",
+        "path": "/home/ubuntu/canon/tasks/regulatory-dna-design"
+    },
+    "install_only": false,
+    "timeout_multiplier": 1.0,
+    "agent": {
+        "name": "codex",
+        "model_name": "gpt-5.6-sol",
+        "skills": [],
+        "extra_allowed_hosts": [
+            "api.openai.com",
+            "chatgpt.com",
+            "auth.openai.com"
+        ],
+        "kwargs": {},
+        "mcp_servers": []
+    },
+    "skills": [],
+    "environment": {
+        "type": "docker",
+        "force_build": false,
+        "delete": true,
+        "cpu_enforcement_policy": "auto",
+        "memory_enforcement_policy": "auto",
+        "extra_docker_compose": [],
+        "kwargs": {},
+        "extra_allowed_hosts": []
+    },
+    "verifier": {
+        "disable": false
+    }
+}

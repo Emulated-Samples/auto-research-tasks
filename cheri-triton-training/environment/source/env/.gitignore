@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.js.map
+*.d.ts.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Hyperfocal (credentials and runtime state)
+.hyperfocal/
+
+# Telemetry (local test runs)
+/telemetry/
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+cloud-dev.sh
+__pycache__/

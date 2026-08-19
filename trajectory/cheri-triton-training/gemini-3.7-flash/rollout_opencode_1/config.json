@@ -1,0 +1,34 @@
+{
+    "task": {
+        "path": "/home/ubuntu/canon/tasks/cheri-triton-training"
+    },
+    "trial_name": "cheri-triton-training__FeyqTqD",
+    "trials_dir": "/home/ubuntu/jobs/wave/gemini-cheri-triton-training/run",
+    "agent_timeout_multiplier": 0.0833334,
+    "agent": {
+        "name": "opencode",
+        "model_name": "openrouter/google/gemini-3.7-flash",
+        "extra_allowed_hosts": [
+            "openrouter.ai"
+        ],
+        "kwargs": {
+            "opencode_config": {
+                "provider": {
+                    "openrouter": {
+                        "options": {
+                            "extraBody": {
+                                "provider": {
+                                    "order": [
+                                        "google-vertex"
+                                    ],
+                                    "allow_fallbacks": false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "job_id": "c8dc698b-8b2b-4345-858b-202e1bf95996"
+}

@@ -1,0 +1,28 @@
+{
+  "failClosed": false,
+  "erroredHandling": "exclude-errored",
+  "erroredTestIds": [],
+  "skippedTestIds": [],
+  "weights": {
+    "contract": 0,
+    "mastery": 0,
+    "category:compression": 0.18,
+    "category:efficiency": 0.03,
+    "category:factor_discovery": 0.21,
+    "category:factor_recovery": 0.32,
+    "category:reconstruction": 0,
+    "category:structural_coherence": 0.26
+  },
+  "statuses": {
+    "contract": "passed",
+    "mastery": "failed",
+    "category:compression": "failed",
+    "category:efficiency": "passed",
+    "category:factor_discovery": "failed",
+    "category:factor_recovery": "failed",
+    "category:reconstruction": "failed",
+    "category:structural_coherence": "failed"
+  },
+  "generatedAt": "2026-08-19T17:08:45.292Z",
+  "generator": "env-base/harbor/rewards"
+}

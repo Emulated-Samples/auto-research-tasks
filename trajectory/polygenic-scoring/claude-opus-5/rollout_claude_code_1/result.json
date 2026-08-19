@@ -1,0 +1,131 @@
+{
+    "id": "d75b1e4c-9a5e-43d4-8783-44e4a57779f0",
+    "task_name": "sc-svpgsbench__main__from_scratch_svpgs",
+    "trial_name": "sc-svpgsbench__main__from_scratc__FZA2EjA",
+    "trial_uri": "file:///home/ubuntu/jobs/ar-opus/sc-svpgsbench__main__from_scratch_svpgs/2026-08-18__10-27-32/sc-svpgsbench__main__from_scratc__FZA2EjA",
+    "task_id": {
+        "path": "tasks/autoresearch-six/sc-svpgsbench__main__from_scratch_svpgs"
+    },
+    "source": null,
+    "task_checksum": "00d3b3f8fac26948f6790de98e66fadbdc63981f36bb51435055ed398a176d56",
+    "config": {
+        "task": {
+            "path": "tasks/autoresearch-six/sc-svpgsbench__main__from_scratch_svpgs",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "sc-svpgsbench__main__from_scratc__FZA2EjA",
+        "trials_dir": "/home/ubuntu/jobs/ar-opus/sc-svpgsbench__main__from_scratch_svpgs/2026-08-18__10-27-32",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "claude-code",
+            "import_path": null,
+            "model_name": "claude-opus-5",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "extra_allowed_hosts": [
+                "api.anthropic.com",
+                "statsig.anthropic.com",
+                "sentry.io"
+            ],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "cafa2ec7-d517-4df4-9589-66d026703ff0"
+    },
+    "agent_info": {
+        "name": "claude-code",
+        "version": "2.1.234",
+        "model_info": {
+            "name": "claude-opus-5",
+            "provider": null
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 6773936,
+        "n_cache_tokens": 6632187,
+        "n_output_tokens": 102092,
+        "cost_usd": 7.285233499999999,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1.0101148823173296,
+            "benchmark": 1.01011488231733,
+            "category:ancestry_shift": 1.2151801807739582,
+            "category:annotation_interaction": 1.19203212878743,
+            "category:decoy_annotations": 1.0926210392681803,
+            "category:dense_infinitesimal": 1.1078219446718964,
+            "category:ld_shift": 1.2569590836004854,
+            "category:low_prevalence": 1.0155391397176687,
+            "category:nonlinear_annotation": 1.2012041550463581,
+            "category:rare_variant_maf": 1.1523276057452219,
+            "category:soft_membership": 1.1554867404779865,
+            "category:sparse_dense_mix": 0.7833863608307595,
+            "category:sparse_heavy_tail": 1.2367762456019056,
+            "category:suppressor_ld": 0.775463705455981,
+            "category:svld_class": 1.2321373386939918,
+            "category:svld_strong": 1.041233818356209,
+            "category:weak_ld": 1.2134052175571852
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-18T10:27:35.061161Z",
+    "finished_at": "2026-08-18T11:03:01.834155Z",
+    "environment_setup": {
+        "started_at": "2026-08-18T10:27:35.963006Z",
+        "finished_at": "2026-08-18T10:27:50.442937Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-18T10:27:50.442991Z",
+        "finished_at": "2026-08-18T10:28:02.188292Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-18T10:28:02.188440Z",
+        "finished_at": "2026-08-18T11:00:22.254810Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-18T11:00:22.643287Z",
+        "finished_at": "2026-08-18T11:02:50.583804Z"
+    },
+    "step_results": null
+}

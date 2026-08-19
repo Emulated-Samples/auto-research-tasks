@@ -1,0 +1,65 @@
+# Analyzing a Cherimoya model with tangermeme
+
+Post-training analysis — attributions via saturation mutagenesis (ISM, the
+method Cherimoya uses), marginalization, variant-effect scoring, and sequence
+design — lives in **tangermeme**, not Cherimoya. (DeepLIFT/SHAP via
+`deep_lift_shap` is an alternative on a wrapped model.) Cherimoya's only job is
+to expose the right single tensor from its `(profile, log-count)` output.
+
+**If a `tangermeme` skill is available, invoke it for the actual analysis.**
+This file covers only the Cherimoya-specific step — choosing and applying the
+output wrapper — and does not duplicate tangermeme's API. Read the tangermeme
+skill/docs for the analysis call; don't guess its signature.
+
+## The wrappers (from `cherimoya`)
+
+tangermeme's tools expect a model returning a **single tensor**, but Cherimoya
+returns `(profile, log-count)`. Pick the wrapper for what you want to attribute
+or optimize:
+
+| Wrapper | Returns | Use for |
+|---|---|---|
+| `ProfileWrapper` | scalar per example from profile logits (weighted softmax) | profile **shape** |
+| `LogCountWrapper` | the log-count prediction | **total signal** (counts) at a locus |
+| `ExpectedCountsWrapper` | expected reads per base pair | per-position expected counts |
+| `ControlWrapper` | raw `(profile, log-count)`, synthesizing a zero control if needed | the **inner** wrapper for control-trained models |
+
+**`LogCountWrapper` (counts) is the recommended default; use `ProfileWrapper`
+when you care about profile shape.** `ControlWrapper` is the inner layer the
+profile/count wrappers sit on: for a control-trained model whose analysis tool
+passes only a sequence, it supplies a zero control of the right
+shape/dtype/device automatically. For a model with no controls it's a
+pass-through, so wrapping is always safe.
+
+## Pattern
+
+```python
+from cherimoya import Cherimoya
+from cherimoya import ControlWrapper
+from cherimoya import LogCountWrapper
+
+model = Cherimoya.load("my_run.torch", device="cuda")
+model = model.eval()
+
+# Attribute the counts (usual default); ControlWrapper handles a
+# control-trained model transparently. Swap in ProfileWrapper for shape.
+wrapper = LogCountWrapper(ControlWrapper(model))
+
+# Hand `wrapper` to tangermeme (saturation_mutagenesis, deep_lift_shap,
+# variant effect, ledidi design, ...).
+```
+
+## What lives where
+
+- **Cherimoya** — the model and the four wrappers above. Use these, not
+  bpnet-lite's.
+- **tangermeme** — `predict`, `saturation_mutagenesis`, `deep_lift_shap`,
+  `variant_effect`, `ersatz` (motif insertion), `seqlet.recursive_seqlets`,
+  `io.extract_loci`, MEME/bigWig/VCF loaders, plotting. Don't reimplement.
+- **ledidi** — gradient-based sequence design against a wrapped model, when the
+  user wants to *design* rather than *analyze*.
+
+The CLI already wires these for the standard flow (`attribute`, `seqlets`,
+`marginalize` in `cli-training-pipeline.md`). Reach for tangermeme directly only
+for something the pipeline doesn't do — a custom attribution target, variant
+scoring, or bespoke design objective.

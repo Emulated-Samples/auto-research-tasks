@@ -1,0 +1,14 @@
+{
+  "schema_version": 3,
+  "benchmark_schema_version": 8,
+  "environment_id": "sc-svpgsbench",
+  "status": "uncalibrated",
+  "manifest_sha256": "31bdd79e543bb0b84757febde37d4fd2aa5f888d7c691f91228b52b63261f06f",
+  "scoring_contract_sha256": "c7e77020df69f07b913053dee8fc2ced7c63deb28426112f19db537fc5dd499e",
+  "wrapper_sha256": "f6951122fbf6116f961b6246812a58186b5bacaa958cdc3e86c78ad3c1f0c6e0",
+  "mastery_threshold": null,
+  "mastery_tail_threshold": null,
+  "calibration_rollouts": [],
+  "evaluation_rollouts": [],
+  "calibration_hmac_sha256": "3b2cb958d6d6b9a9b5ee56b6f4bdd6c69a34c621c64392e4b743a39c1cfd65c7"
+}

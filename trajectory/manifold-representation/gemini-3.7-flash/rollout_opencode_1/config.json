@@ -1,0 +1,34 @@
+{
+    "task": {
+        "path": "/home/ubuntu/canon/tasks/manifold-representation"
+    },
+    "trial_name": "manifold-representation__cuC7qkS",
+    "trials_dir": "/home/ubuntu/jobs/wave/gemini-manifold-representation/run-1787156167",
+    "agent_timeout_multiplier": 0.1,
+    "agent": {
+        "name": "opencode",
+        "model_name": "openrouter/google/gemini-3.7-flash",
+        "extra_allowed_hosts": [
+            "openrouter.ai"
+        ],
+        "kwargs": {
+            "opencode_config": {
+                "provider": {
+                    "openrouter": {
+                        "options": {
+                            "extraBody": {
+                                "provider": {
+                                    "order": [
+                                        "google-vertex"
+                                    ],
+                                    "allow_fallbacks": false
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "job_id": "a100697d-d830-40bb-8001-17c2242f98e7"
+}

@@ -1,0 +1,19 @@
+{
+  "reward": 1.0101148823173296,
+  "benchmark": 1.01011488231733,
+  "category:ancestry_shift": 1.2151801807739582,
+  "category:annotation_interaction": 1.19203212878743,
+  "category:decoy_annotations": 1.0926210392681803,
+  "category:dense_infinitesimal": 1.1078219446718964,
+  "category:ld_shift": 1.2569590836004854,
+  "category:low_prevalence": 1.0155391397176687,
+  "category:nonlinear_annotation": 1.2012041550463581,
+  "category:rare_variant_maf": 1.1523276057452219,
+  "category:soft_membership": 1.1554867404779865,
+  "category:sparse_dense_mix": 0.7833863608307595,
+  "category:sparse_heavy_tail": 1.2367762456019056,
+  "category:suppressor_ld": 0.775463705455981,
+  "category:svld_class": 1.2321373386939918,
+  "category:svld_strong": 1.041233818356209,
+  "category:weak_ld": 1.2134052175571852
+}

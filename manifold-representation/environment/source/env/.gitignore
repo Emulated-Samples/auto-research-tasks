@@ -1,0 +1,29 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# The control plane writes LIVE AWS credentials (AWS_ACCESS_KEY_ID / SECRET /
+# SESSION_TOKEN, via SSM) into environment/.env inside this checkout. The file is
+# 0600 and root-owned, so it is invisible in a casual listing and survives until
+# one `git add -A` puts live keys in a public repository. Deny the whole class.
+.env
+*.env
+.env.*
+!.env.example
+# environment/dist/ is TRACKED, deliberately. It is the compiled reward adapter
+# the platform actually runs, the env's provision.sh does NOT build it (Python
+# only), and env-publish ships whatever is in the working tree. Gitignoring it
+# meant a stale dist could ship silently against fresh source -- which is exactly
+# how a breadth-floor change to index.ts went to production with the old compiled
+# check still in dist, erroring a rollout at grade time. Committing dist with its
+# source makes the two reviewable together and lets a test catch drift.
+environment/node_modules/
+grader/harness.json
+workspace/dev/
+# rollout_analysis/artifacts/ is TRACKED. It was ignored, which quietly made every
+# citation in this directory unverifiable: the analyses name transcripts and
+# submitted solutions as their evidence, and nobody but the author who ran the
+# rollout had the bytes. A forensic record that lives on one laptop is a claim,
+# not evidence -- and the whole point of these reports is that they are checkable.
+# The cost is ~2.6 MB of jsonl and zips, which is nothing against re-running a
+# $50 cohort to answer a question the logs already answered.

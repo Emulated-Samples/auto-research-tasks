@@ -1,0 +1,223 @@
+{
+  "schema_version": 8,
+  "id": "d_c67fefb0ebb9dbcf516a7960b7bc3644",
+  "path": "sparse_heavy_tail/d_c67fefb0ebb9dbcf516a7960b7bc3644",
+  "family": "binomial-logit",
+  "category": "sparse_heavy_tail",
+  "replicate": 2,
+  "weight": 1.0,
+  "metrics_naive": {
+    "auc": 0.5763064114082461,
+    "brier": 0.20841515990777565,
+    "log_loss": 0.606936932435135
+  },
+  "metrics_reference": {
+    "auc": 0.6295201961354853,
+    "brier": 0.20161540356814278,
+    "log_loss": 0.5905478984062216
+  },
+  "metrics_ref_naive_se": {
+    "auc": 0.00529907538757335,
+    "brier": 0.0006075138592591687,
+    "log_loss": 0.0014516066776665891
+  },
+  "metrics_naive_se": {
+    "auc": 0.006120242049669121,
+    "brier": 0.0019964932337263297,
+    "log_loss": 0.004427652464537954
+  },
+  "time_reference": 62.04244456693414,
+  "time_runtime_anchor": 0.9883399909958825,
+  "reference_fit": {
+    "implementation": "public NumPy best-of-family (hierarchical_eb | ridge_logistic)",
+    "entrypoint": "gold/fit",
+    "fit_protocol": "public_numpy_family_inner_validation_platt_full_refit",
+    "python_executable": "/opt/svpgs-venv/bin/python",
+    "numpy_version": "2.1.3",
+    "public_source_sha256": "a52f2c40ba153ade15d948051bdbc4b3ab59502d8f725d1a118571b04684045f",
+    "converged": true
+  },
+  "reference_protocol": {
+    "protocol_version": 9,
+    "reference_method": "hierarchical_eb",
+    "converged": true,
+    "fit_protocol": "public_numpy_family_inner_validation_platt_full_refit",
+    "wall_time_s": 46.591353038995294,
+    "inner_selection_auc": {
+      "hierarchical_eb": 0.5701551062289856,
+      "ridge_logistic": 0.5456752572124854
+    },
+    "classes_present": [
+      "deletion_long",
+      "deletion_short",
+      "duplication_long",
+      "duplication_short",
+      "insertion_mei",
+      "inversion_bnd_complex",
+      "other_complex_sv",
+      "small_indel",
+      "snv",
+      "str_vntr_repeat"
+    ],
+    "training_output": {
+      "model_sha256": "75ceff2d3ca212723d8628c6abdb22c4c60f77833dd1d3f4c943496e1b7222d3",
+      "model_byte_count": 182671
+    },
+    "fit_exit_code": 0,
+    "fit_source_sha256": "a52f2c40ba153ade15d948051bdbc4b3ab59502d8f725d1a118571b04684045f",
+    "fit_python_executable": "/opt/svpgs-venv/bin/python",
+    "fit_numpy_version": "2.1.3",
+    "reference_total_fit_wall_s": 46.591353038995294,
+    "reference_full_fit_wall_s": 30.985179169998446,
+    "reference_program_reported_wall_s": 46.426379857999564,
+    "selection_wall_s": 15.440766915002314,
+    "calibration_intercept": -0.3941006753575173,
+    "calibration_slope": 0.4924441121490633,
+    "calibration_iterations": 5,
+    "calibration_relative_gradient": 1.3648921268660556e-09,
+    "inner_ridge_trials": [
+      {
+        "penalty": 0.3,
+        "auc": 0.5456752572124854,
+        "converged": true
+      },
+      {
+        "penalty": 0.1,
+        "auc": 0.5367060310945387,
+        "converged": true
+      },
+      {
+        "penalty": 0.03,
+        "auc": 0.5325100090700039,
+        "converged": true
+      },
+      {
+        "penalty": 0.01,
+        "auc": 0.5299905635312548,
+        "converged": true
+      },
+      {
+        "penalty": 0.003,
+        "auc": 0.5278925525189875,
+        "converged": true
+      },
+      {
+        "penalty": 0.001,
+        "auc": 0.5265274711179925,
+        "converged": true
+      }
+    ],
+    "hierarchical_outer_iterations": 6,
+    "hierarchical_inner_iterations_run": 6,
+    "hierarchical_inner_global_scale": 0.019800269535290464,
+    "hierarchical_iterations_run": 6,
+    "hierarchical_global_scale": 0.019722820533170288,
+    "prediction_exit_code": 0,
+    "prediction_wall_s": 15.451091527938843,
+    "prediction_output_sha256": "11a840b6160156b153c0e8dead374e45268e196b11a9c554e7589cea94958a27",
+    "prediction_output_byte_count": 202857,
+    "prediction_model_sha256": "75ceff2d3ca212723d8628c6abdb22c4c60f77833dd1d3f4c943496e1b7222d3",
+    "prediction_source_sha256": "a52f2c40ba153ade15d948051bdbc4b3ab59502d8f725d1a118571b04684045f",
+    "execution_order": [
+      "all_anchor_fits",
+      "prediction_data_load",
+      "all_anchor_predictions",
+      "truth_load"
+    ]
+  },
+  "provenance": {
+    "schema_version": 8,
+    "code_version": "build_corpus/schema-v8",
+    "builder_sha256": "dd6772f2b47f6c1b448dea2432af1be95c95d190c0c087daa055ce1abe7fda05",
+    "purpose": "shipping",
+    "generation_pipeline_sha256": "96aa4de9235837999681d5d285920495902dbdc7a90f26c3f7106d3c00dc8c6d",
+    "id": "d_c67fefb0ebb9dbcf516a7960b7bc3644",
+    "path": "sparse_heavy_tail/d_c67fefb0ebb9dbcf516a7960b7bc3644",
+    "category": "sparse_heavy_tail",
+    "replicate": 2,
+    "N": 12000,
+    "P": 2500,
+    "family": "binomial-logit",
+    "prior_cols": [
+      "variant_class",
+      "sv_log_length",
+      "repeat_overlap"
+    ],
+    "cfg": {
+      "ancestry_confounding": 0.5,
+      "causal_maf_max": 0.5,
+      "class_length_interaction": 0.0,
+      "class_scale_spread": 2.0,
+      "class_weights": null,
+      "dense_scale_spread": 0.15,
+      "dense_var_share": 0.5,
+      "effect_family": "tpb_slab",
+      "frac_train_hint": 0.15,
+      "global_scale": 0.9,
+      "heritability": 0.85,
+      "ld_block_max": 40,
+      "ld_block_min": 5,
+      "ld_rho_hi": 0.7,
+      "ld_rho_lo": 0.4,
+      "ld_shift": false,
+      "ld_shift_rho_hi": 0.25,
+      "ld_shift_rho_lo": 0.0,
+      "length_coef_mean": 0.2,
+      "length_nonlinear_coef": 0.0,
+      "n_decoy_annotations": 0,
+      "n_pcs": 10,
+      "n_samples": 12000,
+      "n_variants": 2500,
+      "nuisance_cov_cols": 0,
+      "nuisance_cov_strength": 0.7,
+      "null_frac": 0.4,
+      "prevalence": 0.3,
+      "repeat_coef_mean": -0.6,
+      "small_indel_frac": 0.1,
+      "snv_causal_frac": 0.6,
+      "snv_frac": 0.7,
+      "soft_frac": 0.0,
+      "soft_membership": false,
+      "soft_weight_hi": 0.8,
+      "soft_weight_lo": 0.55,
+      "spike_frac": 0.02,
+      "suppressor_block_frac": 0.0,
+      "suppressor_min_corr": 0.55,
+      "suppressor_overshoot_hi": 0.8,
+      "suppressor_overshoot_lo": 0.3,
+      "suppressor_var_share": 0.6,
+      "tail_temper": 1.9
+    },
+    "file_sha256": {
+      "public/covariates_test.csv": "429485aae63caed16bff12e345ddefb79ac68360bba1146c3d74ab1ae481c959",
+      "public/covariates_train.csv": "a61eb2bb7f73542c4d32225b6a136953a47e4118af15c4dd03813565d8e1d00a",
+      "public/dgp.json": "99b65408c0a1690b5cdc117e486cc9c60ccc9953268fd3ba1a5b0b3ae5f522ad",
+      "public/family.txt": "1f2461b86af3a259ff10878ef6c688f0d4fbf5a1612217096bef6c13f6944dcc",
+      "public/formula.txt": "cd6eaaca1db3f924c22509a0fe6304c7a41b541a9a23e313baa4557fa930afb3",
+      "public/genotypes_test.tsv.gz": "d76ef1da643a2897525d5b9929aafa593157fc55c35fc0dbb65b626e1889c905",
+      "public/genotypes_train.tsv.gz": "475ff91f334d6281f71ef81df7d74322c553334e2ae92aba3e2b4d4517b3b06d",
+      "public/variant_metadata.tsv": "93e805e3c27f4536d22d1094e3dd538d114e7228045c51e95c453492ee52a336",
+      "truth/truth.npz": "a1eb1ee843024c07c79fbaf433e817c4fc6413a557a3727430b2a7e3fbe88881",
+      "truth/y_test.csv": "73ca4851e1a6ce254bb7ae2b29930a2d900352b36c51c1e8107f922b5f87bea6"
+    }
+  },
+  "time_calibration": 0.004617562997736968,
+  "time_runtime_calibration": 0.004617562997736968,
+  "time_calibration_repetitions": [
+    0.007550110996817239,
+    0.005071547995612491,
+    0.0046455670017166995,
+    0.004617562997736968,
+    0.004647172005206812
+  ],
+  "_n_train": 1800,
+  "_n_test": 10200,
+  "_n_variants": 2500,
+  "_gap": 0.053213784727239144,
+  "_prior_cols": [
+    "variant_class",
+    "sv_log_length",
+    "repeat_overlap"
+  ],
+  "anchor_hmac_sha256": "5e80a7427efeaa471c2fe0f22699fd7382fc3d2721881c5612b5ccab996d9c33"
+}

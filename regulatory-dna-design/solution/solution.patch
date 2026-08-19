@@ -1,0 +1,76 @@
+diff --git a/workspace/src/varseq/design_task.py b/workspace/src/varseq/design_task.py
+index 7e53f7a..2ad0fdb 100644
+--- a/workspace/src/varseq/design_task.py
++++ b/workspace/src/varseq/design_task.py
+@@ -1,2 +1,70 @@
++import numpy as np
++
++from varseq.oracle import TRACK_NAMES, load_seed_sequences
++
++_BASES = "ACGT"
++
++
+ def design(oracle, track, budget, length, n_designs, seed):
+-    raise NotImplementedError
++    if not (isinstance(budget, int) and budget > 0):
++        raise ValueError("budget must be a positive int")
++    if not (isinstance(length, int) and length > 0):
++        raise ValueError("length must be a positive int")
++    if length != getattr(oracle, "input_length", length):
++        raise ValueError(f"length {length} != oracle input length {oracle.input_length}")
++    if not (isinstance(n_designs, int) and n_designs > 0):
++        raise ValueError("n_designs must be a positive int")
++    n_tracks = getattr(oracle, "n_tracks", len(TRACK_NAMES))
++    if not (isinstance(track, int) and 0 <= track < n_tracks):
++        raise ValueError(f"track {track} out of range [0,{n_tracks})")
++    if budget < n_designs:
++        raise ValueError("budget too small to score even one design each")
++
++    rng = np.random.RandomState(seed)
++
++    # Warm-start from in-distribution scaffolds: real regulatory sequences carry transferable motif
++    # grammar, so a search seeded there and moved locally stays in a basin that generalises to a
++    # held-out model — rather than drifting into oracle-specific adversarial artifacts.
++    pool = [s for s in load_seed_sequences() if len(s) == length]
++    used = 0
++    if pool:
++        pool_scores = oracle(pool)[:, track]
++        used += len(pool)
++        order = np.argsort(pool_scores)[::-1]
++        population = [pool[i] for i in order[:12]]
++    else:
++        population = ["".join(rng.choice(list(_BASES), size=length)) for _ in range(12)]
++
++    # Elitist population directed evolution: each round spawns local 1-2 substitution offspring from
++    # the current elite, keeps the best. Local moves preserve real sequence context (sample-efficient
++    # and transfer-friendly) vs greedy full-ISM which spends the whole budget perfecting one lineage.
++    n_off = 24
++    scored = [(float(s), seq) for s, seq in zip(oracle(population)[:, track], population)]
++    used += len(population)
++    scored.sort(reverse=True)
++    while used + n_off <= budget - n_off:
++        elite = [seq for _, seq in scored[:12]]
++        offspring = []
++        for _ in range(n_off):
++            parent = elite[rng.randint(len(elite))]
++            s = list(parent)
++            for _ in range(rng.randint(1, 3)):
++                s[rng.randint(length)] = _BASES[rng.randint(4)]
++            offspring.append("".join(s))
++        vals = oracle(offspring)[:, track]
++        used += len(offspring)
++        scored += [(float(vals[i]), offspring[i]) for i in range(len(offspring))]
++        scored.sort(reverse=True)
++        scored = scored[:64]
++
++    # Return the top distinct designs.
++    out, seen = [], set()
++    for _, seq in scored:
++        if seq not in seen:
++            seen.add(seq)
++            out.append(seq)
++        if len(out) == n_designs:
++            break
++    while len(out) < n_designs:
++        out.append(scored[0][1])
++    return out

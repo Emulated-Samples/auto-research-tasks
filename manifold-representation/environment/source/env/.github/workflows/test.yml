@@ -1,0 +1,28 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # env-base is a submodule and environment/package.json depends on it by
+          # relative path. Without this the TypeScript build cannot resolve
+          # @hyperfocal/env-base and CI was never building the shipped adapter.
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy
+      - run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - working-directory: environment
+        run: npm ci
+      - working-directory: environment
+        run: npm run build

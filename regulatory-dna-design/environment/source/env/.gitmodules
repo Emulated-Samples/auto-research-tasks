@@ -1,0 +1,12 @@
+[submodule "packages/env-base"]
+	path = packages/env-base
+	url = https://github.com/Hyperfocal-AI-Packages/env-base.git
+	branch = main
+[submodule "packages/env-orchestrator"]
+	path = packages/env-orchestrator
+	url = https://github.com/Hyperfocal-AI-Packages/env-orchestrator.git
+	branch = main
+[submodule "packages/env-builder"]
+	path = packages/env-builder
+	url = https://github.com/Hyperfocal-AI-Packages/env-builder.git
+	branch = main

@@ -1,0 +1,17 @@
+{
+  "name": "@hyperfocal/env-manifold-bench",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hyperfocal/env-base": "file:../packages/env-base"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "20.19.43"
+  }
+}

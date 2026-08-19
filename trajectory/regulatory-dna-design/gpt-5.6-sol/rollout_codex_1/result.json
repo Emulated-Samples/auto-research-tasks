@@ -1,0 +1,128 @@
+{
+    "id": "1d7309cb-42f8-4467-99b9-8fe863fe3d2c",
+    "task_name": "regulatory-dna-design",
+    "trial_name": "regulatory-dna-design__sDnmpEP",
+    "trial_uri": "file:///home/ubuntu/jobs/wave/sol-regulatory-dna-design/2026-08-19__12-05-02/regulatory-dna-design__sDnmpEP",
+    "task_id": {
+        "path": "/home/ubuntu/canon/tasks/regulatory-dna-design"
+    },
+    "source": null,
+    "task_checksum": "d335aea9df8fc76c512cb6bbdca0d60a07feaf78dc9f356d51e7327590ebe0d3",
+    "config": {
+        "task": {
+            "path": "/home/ubuntu/canon/tasks/regulatory-dna-design",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "regulatory-dna-design__sDnmpEP",
+        "trials_dir": "/home/ubuntu/jobs/wave/sol-regulatory-dna-design/2026-08-19__12-05-02",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": null,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "codex",
+            "import_path": null,
+            "model_name": "gpt-5.6-sol",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "extra_allowed_hosts": [
+                "api.openai.com",
+                "chatgpt.com",
+                "auth.openai.com"
+            ],
+            "kwargs": {},
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "df3d38e0-2f9f-488e-9e37-c6eff95e5c4c"
+    },
+    "agent_info": {
+        "name": "codex",
+        "version": "0.148.0",
+        "model_info": {
+            "name": "gpt-5.6-sol",
+            "provider": null
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 1075297,
+        "n_cache_tokens": 1017146,
+        "n_output_tokens": 20404,
+        "cost_usd": 1.411448,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 1,
+            "pytest-test_heldout_Dev": 1,
+            "pytest-test_invalid_args_raise[bad0]": 1,
+            "pytest-test_invalid_args_raise[bad1]": 1,
+            "pytest-test_invalid_args_raise[bad2]": 1,
+            "pytest-test_invalid_args_raise[bad3]": 1,
+            "pytest-test_invalid_args_raise[bad4]": 1,
+            "pytest-test_invalid_args_raise[bad5]": 1,
+            "pytest-test_invalid_args_raise[bad6]": 1,
+            "pytest-test_invalid_args_raise[bad7]": 1,
+            "cat-design-under-workspace": 1,
+            "cat-no-pypi-reshadow": 1,
+            "cat-evaluator-not-in-workspace": 1,
+            "cat-determinism": 1
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-19T12:27:43.102935Z",
+    "finished_at": "2026-08-19T12:51:58.014920Z",
+    "environment_setup": {
+        "started_at": "2026-08-19T12:27:43.189201Z",
+        "finished_at": "2026-08-19T12:33:10.020255Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-19T12:33:10.020287Z",
+        "finished_at": "2026-08-19T12:33:34.876214Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-19T12:33:34.876300Z",
+        "finished_at": "2026-08-19T12:50:53.633339Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-19T12:50:54.066767Z",
+        "finished_at": "2026-08-19T12:51:45.065729Z"
+    },
+    "step_results": null
+}

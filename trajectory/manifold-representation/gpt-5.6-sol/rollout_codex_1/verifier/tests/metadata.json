@@ -1,0 +1,14 @@
+{
+  "problemId": "M6_full",
+  "lastActivity": "2026-08-19T17:08:45.294Z",
+  "sessions": [
+    {
+      "timestamp": "2026-08-19T17-08-33-404Z",
+      "category": "tests",
+      "command": "test",
+      "status": "failed",
+      "duration": 11890,
+      "error": "6 test(s) failed or partially passed"
+    }
+  ]
+}

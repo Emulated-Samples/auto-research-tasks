@@ -1,0 +1,16 @@
+{
+  "failClosed": false,
+  "erroredHandling": "exclude-errored",
+  "erroredTestIds": [],
+  "skippedTestIds": [],
+  "weights": {
+    "deps": 0,
+    "training-kernel": 1
+  },
+  "statuses": {
+    "deps": "passed",
+    "training-kernel": "failed"
+  },
+  "generatedAt": "2026-08-19T12:49:28.571Z",
+  "generator": "env-base/harbor/rewards"
+}

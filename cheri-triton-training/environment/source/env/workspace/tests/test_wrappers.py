@@ -1,0 +1,416 @@
+"""Tests for the model wrappers in ``cherimoya.wrappers``."""
+
+import pytest
+import torch
+
+from numpy.testing import assert_array_almost_equal
+
+from cherimoya import Cherimoya
+from cherimoya.wrappers import ControlWrapper
+from cherimoya.wrappers import ProfileWrapper
+from cherimoya.wrappers import LogCountWrapper
+from cherimoya.wrappers import ExpectedCountsWrapper
+
+
+def _input_window_for(model):
+	"""Compute a valid input window length for `model`."""
+	# Output window must be > 0; trimming bytes are removed from each side.
+	return 2 * model.trimming + 64
+
+
+@pytest.fixture
+def grouped_model():
+	# One unstranded track plus one stranded (+, -) pair: the profile head
+	# emits sum([1, 2]) = 3 channels while the count head emits len([1, 2]) = 2
+	# predictions. This is the config that exercises the channel-vs-group
+	# bookkeeping in ExpectedCountsWrapper. Seed first so the random weight
+	# init is fixed and the regression values below are reproducible.
+	torch.manual_seed(0)
+	return Cherimoya(n_filters=8, n_layers=2, signal_groups=[1, 2],
+		verbose=False, compile=False).eval()
+
+
+@pytest.fixture
+def control_model():
+	torch.manual_seed(0)
+	return Cherimoya(n_filters=8, n_layers=2, signal_groups=[1, 2],
+		n_control_tracks=1, verbose=False, compile=False).eval()
+
+
+# --------- ControlWrapper --------------------------------------------------
+
+def test_control_wrapper_passthrough_no_controls(grouped_model):
+	"""A model with no control tracks is forwarded through unchanged."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(4, 4, L)
+
+	with torch.no_grad():
+		ref_profile, ref_counts = grouped_model(X)
+		profile, counts = ControlWrapper(grouped_model)(X)
+
+	assert torch.equal(profile, ref_profile)
+	assert torch.equal(counts, ref_counts)
+
+
+def test_control_wrapper_synthesizes_zero_control(control_model):
+	"""When the model expects a control track but none is passed, an all-zero
+	track of the right shape is supplied — equivalent to passing zeros."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+	X_ctl = torch.zeros(2, control_model.n_control_tracks, L)
+
+	with torch.no_grad():
+		ref_profile, ref_counts = control_model(X, X_ctl=X_ctl)
+		profile, counts = ControlWrapper(control_model)(X)
+
+	assert torch.equal(profile, ref_profile)
+	assert torch.equal(counts, ref_counts)
+
+
+def test_control_wrapper_forwards_given_control(control_model):
+	"""An explicit control track is passed straight through to the model."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+	X_ctl = torch.rand(2, 1, L)
+
+	with torch.no_grad():
+		ref_profile, ref_counts = control_model(X, X_ctl=X_ctl)
+		profile, counts = ControlWrapper(control_model)(X, X_ctl=X_ctl)
+
+	assert torch.equal(profile, ref_profile)
+	assert torch.equal(counts, ref_counts)
+
+
+def test_control_wrapper_matches_bpnetlite(control_model):
+	"""The port is numerically identical to bpnet-lite's ControlWrapper."""
+	bpnet = pytest.importorskip("bpnetlite.bpnet")
+
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		ours_profile, ours_counts = ControlWrapper(control_model)(X)
+		theirs_profile, theirs_counts = bpnet.ControlWrapper(control_model)(X)
+
+	assert_array_almost_equal(ours_profile.numpy(), theirs_profile.numpy(), 6)
+	assert_array_almost_equal(ours_counts.numpy(), theirs_counts.numpy(), 6)
+
+
+def test_control_wrapper_composes_with_output_wrappers(control_model):
+	"""The CLI pattern: an output wrapper layered on ControlWrapper runs a
+	control-track model from the sequence alone."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+
+	wrapped = ControlWrapper(control_model)
+	with torch.no_grad():
+		counts = LogCountWrapper(wrapped)(X)
+		profile = ProfileWrapper(wrapped)(X)
+
+	assert counts.shape == (2, 2)
+	assert profile.shape == (2, 1)
+
+
+# --------- ProfileWrapper --------------------------------------------------
+
+def test_profile_wrapper_shape(grouped_model):
+	"""The wrapper collapses the profile to one number per example."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(4, 4, L)
+
+	with torch.no_grad():
+		y_hat = ProfileWrapper(grouped_model)(X)
+
+	assert y_hat.shape == (4, 1)
+
+
+def test_profile_wrapper_matches_bpnetlite(grouped_model):
+	"""The port is numerically identical to bpnet-lite's ProfileWrapper."""
+	bpnet = pytest.importorskip("bpnetlite.bpnet")
+
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		ours = ProfileWrapper(grouped_model)(X)
+		theirs = bpnet.ProfileWrapper(grouped_model)(X)
+
+	assert_array_almost_equal(ours.numpy(), theirs.numpy(), 6)
+
+
+def test_profile_wrapper_regression(grouped_model):
+	"""Regression on the profile attribution target for a fixed seed."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(1)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		y_hat = ProfileWrapper(grouped_model)(X)
+
+	assert_array_almost_equal(y_hat.numpy(), [
+		[0.00151387],
+		[0.00151552]], 6)
+
+
+def test_profile_wrapper_passes_control(control_model):
+	"""The control track is forwarded through to the model."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(3, 4, L)
+	X_ctl = torch.rand(3, 1, L)
+
+	with torch.no_grad():
+		expected = ProfileWrapper(control_model)(X, X_ctl=X_ctl)
+
+	assert expected.shape == (3, 1)
+	assert torch.isfinite(expected).all()
+
+
+def test_profile_wrapper_is_differentiable(grouped_model):
+	"""Gradients flow to the input — the attribution use case."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L, requires_grad=True)
+
+	ProfileWrapper(grouped_model)(X).sum().backward()
+
+	assert X.grad is not None
+	assert torch.isfinite(X.grad).all()
+
+
+# --------- LogCountWrapper -------------------------------------------------
+
+def test_logcount_wrapper_matches_count_head(grouped_model):
+	"""The wrapper output is exactly the model's second return value."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(4, 4, L)
+
+	with torch.no_grad():
+		_, y_logcounts = grouped_model(X)
+		y_hat = LogCountWrapper(grouped_model)(X)
+
+	assert y_hat.shape == (4, 2)
+	assert torch.equal(y_hat, y_logcounts)
+
+
+def test_logcount_wrapper_regression(grouped_model):
+	"""Regression on the log-count values for a fixed seed."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(1)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		y_hat = LogCountWrapper(grouped_model)(X)
+
+	assert_array_almost_equal(y_hat.numpy(), [
+		[-0.00048958, 0.00141992],
+		[0.00084040, 0.00089380]], 6)
+
+
+def test_logcount_wrapper_passes_control(control_model):
+	"""The control track is forwarded through to the model."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(3, 4, L)
+	# Control tracks are read counts; the count head takes log(sum + 1), so
+	# they must be non-negative.
+	X_ctl = torch.rand(3, 1, L)
+
+	with torch.no_grad():
+		expected = control_model(X, X_ctl=X_ctl)[1]
+		y_hat = LogCountWrapper(control_model)(X, X_ctl=X_ctl)
+
+	assert torch.equal(y_hat, expected)
+
+
+def test_logcount_wrapper_is_differentiable(grouped_model):
+	"""Gradients flow to the input — the attribution use case."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L, requires_grad=True)
+
+	LogCountWrapper(grouped_model)(X).sum().backward()
+
+	assert X.grad is not None
+	assert torch.isfinite(X.grad).all()
+
+
+# --------- ExpectedCountsWrapper -------------------------------------------
+
+def test_expected_counts_shape_matches_profile(grouped_model):
+	"""Output has the profile head's shape: (batch, sum(groups), out_len)."""
+	L = _input_window_for(grouped_model)
+	out_L = L - 2 * grouped_model.trimming
+	torch.manual_seed(0)
+	X = torch.randn(4, 4, L)
+
+	with torch.no_grad():
+		y_hat = ExpectedCountsWrapper(grouped_model)(X)
+
+	assert y_hat.shape == (4, 3, out_L)
+
+
+def test_expected_counts_group_sum_equals_counts(grouped_model):
+	"""Summing expected counts over a group's channels and positions
+	recovers expm1(log_count) for that group — including both strands of
+	the stranded pair."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(4, 4, L)
+
+	with torch.no_grad():
+		y_logits, y_logcounts = grouped_model(X)
+		y_hat = ExpectedCountsWrapper(grouped_model)(X)
+
+	expected_total = torch.expm1(y_logcounts)
+	# Group 0 is the unstranded channel; group 1 is the stranded pair.
+	group0 = y_hat[:, 0:1].sum(dim=(1, 2))
+	group1 = y_hat[:, 1:3].sum(dim=(1, 2))
+
+	assert_array_almost_equal(group0.numpy(), expected_total[:, 0].numpy(), 4)
+	assert_array_almost_equal(group1.numpy(), expected_total[:, 1].numpy(), 4)
+
+
+def test_expected_counts_softmax_is_joint_over_group(grouped_model):
+	"""Within a group the distribution is joint: dividing the expected
+	counts by the group's counts yields probabilities that sum to one across
+	the group's channels and positions, not per-channel."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(2)
+	X = torch.randn(3, 4, L)
+
+	with torch.no_grad():
+		_, y_logcounts = grouped_model(X)
+		y_hat = ExpectedCountsWrapper(grouped_model)(X)
+
+	counts = torch.expm1(y_logcounts)
+	probs1 = y_hat[:, 1:3] / counts[:, 1, None, None]
+	# Joint over the pair: total mass is one. Per-channel it would be two.
+	assert_array_almost_equal(probs1.sum(dim=(1, 2)).numpy(),
+		torch.ones(3).numpy(), 4)
+
+
+def test_expected_counts_single_unstranded_group():
+	"""The default single-group config reduces to a plain softmax-times-count
+	distribution over positions."""
+	torch.manual_seed(0)
+	model = Cherimoya(n_filters=8, n_layers=2, signal_groups=[1],
+		verbose=False, compile=False).eval()
+	L = _input_window_for(model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		y_logits, y_logcounts = model(X)
+		y_hat = ExpectedCountsWrapper(model)(X)
+
+	reference = torch.softmax(y_logits, dim=-1) * torch.expm1(y_logcounts)[:, :, None]
+	assert_array_almost_equal(y_hat.numpy(), reference.numpy(), 4)
+
+
+def test_expected_counts_regression(grouped_model):
+	"""Regression on the expected counts at a few positions for a fixed
+	seed."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(1)
+	X = torch.randn(2, 4, L)
+
+	with torch.no_grad():
+		y_hat = ExpectedCountsWrapper(grouped_model)(X)
+
+	# First three positions of each channel for the first example.
+	assert_array_almost_equal(y_hat[0, :, :3].numpy(), [
+		[-0.00000807, -0.00000754, -0.00000711],
+		[0.00001016, 0.00001177, 0.00001103],
+		[0.00001058, 0.00001080, 0.00001072]], 6)
+
+
+def test_expected_counts_passes_control(control_model):
+	"""The control track is forwarded through to the model."""
+	L = _input_window_for(control_model)
+	torch.manual_seed(0)
+	X = torch.randn(3, 4, L)
+	X_ctl = torch.rand(3, 1, L)
+
+	with torch.no_grad():
+		y_logits, y_logcounts = control_model(X, X_ctl=X_ctl)
+		y_hat = ExpectedCountsWrapper(control_model)(X, X_ctl=X_ctl)
+
+	expected_total = torch.expm1(y_logcounts)
+	group1 = y_hat[:, 1:3].sum(dim=(1, 2))
+	assert_array_almost_equal(group1.numpy(), expected_total[:, 1].numpy(), 4)
+
+
+def test_expected_counts_is_differentiable(grouped_model):
+	"""Gradients flow to the input."""
+	L = _input_window_for(grouped_model)
+	torch.manual_seed(0)
+	X = torch.randn(2, 4, L, requires_grad=True)
+
+	ExpectedCountsWrapper(grouped_model)(X).sum().backward()
+
+	assert X.grad is not None
+	assert torch.isfinite(X.grad).all()
+
+
+# --------- Error handling --------------------------------------------------
+
+def test_profile_wrapper_rejects_wrong_channel_count(grouped_model):
+	"""A sequence that is not 4-channel one-hot fails in the input conv."""
+	L = _input_window_for(grouped_model)
+	X = torch.randn(2, 5, L)
+
+	with pytest.raises(RuntimeError):
+		ProfileWrapper(grouped_model)(X)
+
+
+def test_logcount_wrapper_rejects_wrong_channel_count(grouped_model):
+	"""A sequence that is not 4-channel one-hot fails in the input conv."""
+	L = _input_window_for(grouped_model)
+	X = torch.randn(2, 5, L)
+
+	with pytest.raises(RuntimeError):
+		LogCountWrapper(grouped_model)(X)
+
+
+def test_expected_counts_rejects_wrong_channel_count(grouped_model):
+	"""A sequence that is not 4-channel one-hot fails in the input conv."""
+	L = _input_window_for(grouped_model)
+	X = torch.randn(2, 5, L)
+
+	with pytest.raises(RuntimeError):
+		ExpectedCountsWrapper(grouped_model)(X)
+
+
+def test_expected_counts_requires_signal_groups_attribute(grouped_model):
+	"""ExpectedCountsWrapper reads ``model.signal_groups`` to split the
+	profile head; wrapping a model without it raises AttributeError. This
+	pins the contract that it wraps a Cherimoya directly, not another
+	wrapper."""
+	L = _input_window_for(grouped_model)
+	X = torch.randn(2, 4, L)
+
+	# Wrapping the LogCountWrapper (which has no signal_groups and returns
+	# only counts) is a misuse and should surface clearly.
+	wrapped = ExpectedCountsWrapper(LogCountWrapper(grouped_model))
+
+	with pytest.raises(AttributeError):
+		wrapped(X)
+
+
+def test_expected_counts_missing_control_raises(control_model):
+	"""A model built with control tracks needs the control tensor; omitting
+	it fails in the profile conv where the channels no longer line up."""
+	L = _input_window_for(control_model)
+	X = torch.randn(2, 4, L)
+
+	with pytest.raises(RuntimeError):
+		ExpectedCountsWrapper(control_model)(X)

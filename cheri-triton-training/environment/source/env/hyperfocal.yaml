@@ -1,0 +1,53 @@
+# Hyperfocal Environment Configuration
+# This file configures the env-orchestrator for rollouts and local testing.
+
+version: "1.0"
+
+environment:
+  name: ar-cherimoya
+  description: ""  # TODO: Add description
+
+# Path configuration for EC2 instances
+# These paths are relative to paths.root
+paths:
+  root: /hyperfocal/env
+  environmentDist: environment/dist
+  workspace: workspace
+
+# Agent configuration
+agent:
+  # Whether the agent should have AWS access
+  # Set to true if your environment needs to deploy AWS resources
+  awsAccess: false
+  # Model is configured by env-orchestrator defaults
+  # Uncomment to override: defaultModel: claude-opus-4-8
+
+# Compute requirements — DERIVED EMPIRICALLY from Ahmed's calibration runs.
+# All 43 platform DB runs for ar-cherimoya ran on Modal L4 with this exact shape
+# ({"cpus":4,"gpus":1,"cloud":"modal","gpuType":"L4","memoryMb":16384}); the env
+# is a Triton GPU kernel task (grade_inference.py uses torch.cuda + @triton.jit,
+# perf floor re-timed on the agent GPU each run). gpuTypes is a provisioning
+# request (harbor E-4): emit L4 and it provisions L4, matching the calibration
+# the tier was set on. See docs/12-packaging/02-envs/14-ar-cherimoya.md.
+compute:
+  cloud: modal
+  cpus: 4
+  memoryMb: 16384
+  gpus: 1
+  gpuTypes: [L4]
+
+# Packaging configuration (only read at package time). verifierTimeoutSec raised
+# from the 900s/1800s defaults: the grader runs Triton autotune + perf loops on
+# GPU (whole-run p90 ~89 min in calibration); 3600s covers the grade phase.
+packaging:
+  verifierTimeoutSec: 3600
+  # Grade-phase fix layer 2 (2026-07-20): the venv fix (layer 1) got torch/triton
+  # importing, but Triton's JIT then compiles its CUDA launcher C shim against
+  # the venv's base python headers -- `fatal error: Python.h: No such file or
+  # directory` (check run_019f7f2d, grade_training.py rc=1, no GRADE_JSON). The
+  # AL2023 task base ships no python3-devel. Bake the headers in so the grade
+  # phase can JIT (matches the system python3 the /opt/cheri-grader-venv is
+  # created from; download-only dnf, CPU-safe, no GPU needed at this step).
+  image:
+    dockerfileLines:
+      - RUN dnf install -y --setopt=install_weak_deps=False python3-devel && dnf clean all && rm -rf /var/cache/dnf

@@ -1,0 +1,22 @@
+#!/opt/svpgs-venv/bin/python
+"""BASE-RATE arm: the zero-information predictor.
+
+It reads NOTHING but the training response column -- no genotypes, no
+covariates, not even the formula's covariate list -- and predicts the training
+prevalence for every test sample.
+
+Its purpose is to pin the FREE-CREDIT FLOOR: whatever this earns, every
+submission earns for doing nothing. It is also the sharpest calibration control,
+because a predictor with no discrimination is PERFECTLY calibrated in aggregate
+by construction (its Brier is exactly p(1-p)), so it must never be rejected by a
+calibration gate -- a gate that rejects it is punishing calibration rather than
+protecting it.
+"""
+import csv, json
+
+y = []
+with open("covariates_train.csv") as fh:
+    for row in csv.DictReader(fh):
+        y.append(float(row["y"]))
+
+json.dump({"p": (sum(y) / len(y)) if y else 0.5}, open("model.out", "w"))

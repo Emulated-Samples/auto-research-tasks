@@ -1,0 +1,87 @@
+# Hyperfocal environment configuration for svpgsbench.
+# The solver builds a from-scratch polygenic-scoring library in workspace/.
+version: "1.0"
+
+environment:
+  # Must equal the platform environment id: the release pipeline treats the
+  # yaml name, ECR repo (emulated-tasks/<id>) and released-tasks org repo as
+  # one identity, and builderd refuses to package on a mismatch.
+  name: sc-svpgsbench
+  description: >
+    Implement a polygenic-scoring (genotype -> phenotype) library from scratch in
+    the fixed C/C++/Fortran or Python toolchain, using no PGS/GWAS/GAM/penalized-regression
+    library. Produce accurate, probabilistically calibrated predictions efficiently
+    across diverse cohorts.
+
+# Paths (relative to paths.root).
+paths:
+  root: /hyperfocal/env
+  environmentDist: environment/dist
+  workspace: workspace
+
+# Compute sizing supports the fixed numerical toolchains on a selectable 4-vCPU worker.
+compute:
+  cloud: aws
+  gpus: 0
+  instanceType: t3.xlarge  # selectable platform compute; 4 vCPU / 16 GiB
+  cpus: 4                 # portable requirement -> task.toml
+  memoryMb: 16384          # portable requirement -> task.toml
+
+agent:
+  env:
+    # Solve-phase wall clock: 24 hours.
+    HYPERFOCAL_AGENT_TIMEOUT_MS: "86400000"
+  type: claude-code
+  defaultModel: claude-opus-4-8
+  # The submission runs offline with no network during fit/predict; the agent
+  # itself does not need AWS.
+  awsAccess: false
+  # Unprivileged agent confined to workspace/; execution phases are independently isolated.
+  permissionsMode: linux-user
+
+packaging:
+  # ZERO-CONFIG DEFAULT: nothing here selects the sandbox mode. The grader defaults
+  # to the platform-owned setpriv uid jail (grader/submission_runner.py
+  # _external_sandbox), because harbor's task container is not granted
+  # CAP_SYS_ADMIN and bwrap cannot create its namespaces there — that failed the
+  # deployment preflight at BAKE, so no image could exist. What ships must grade
+  # with nothing set, so the bwrap self-sandbox is skipped by default and the
+  # native bwrap jail is an opt-in (SVPGSBENCH_SANDBOX=bwrap) for EC2 rollouts.
+  #
+  # NO network block — deliberately (customer-parity finding D1,
+  # docs/12-packaging/tmp/03-customer-parity.md, control-plane workspace). The
+  # old advisory `network.verifier no-network` emission made stock harbor 0.18
+  # REFUSE the whole task on macOS/Windows Docker Desktop hosts (the kernel
+  # lacks the nft feature harbor's egress sidecar needs, and the venue probe
+  # errors out before any grade; Linux docker hosts run fine). This grader does
+  # NOT require the network to be absent — offline fit/predict is advisory
+  # (decision 15: reachability is not evidence of a broken jail; the preflight
+  # asserts sealed-state unreadability instead) — so the key bought nothing and
+  # cost macOS runnability. The grader's own seal/jail protections are
+  # untouched.
+  # Flagless source-emission opt-out (env-orchestrator PR #39). The committed
+  # key stays `sourceBundle: false` because the control-plane build preflight
+  # (backend hyperfocalYamlPreflight.ts KNOWN_PACKAGING_KEYS) is a HAND-SYNCED
+  # twin of the orchestrator's parser that is still PRE-#41: it accepts
+  # `sourceBundle` but REJECTS `sourceMode` as "not a recognized key", failing
+  # CreateBuild before a row is created. Absent-key is unsafe too (the flagless
+  # builder would attempt the >428 MB repo.bundle and blow GitHub's 100 MB
+  # per-file gate). So the fleet builder ships PIN-ONLY here, and the buildable
+  # snapshot layer is emitted OPERATOR-SIDE via `harbor package --source-mode
+  # snapshot` and hand-landed into the released task's environment/. FLIP BACK
+  # to `sourceMode: snapshot` once the backend twin gains the `sourceMode` key
+  # and is deployed to Render (the twin's own deploy-before-use rule, cp#111/
+  # cp#114). Owner-ruled sci-env trim: gold/ + rollout_analysis/ + cheats/ were
+  # removed from the tree; reference/ + corpus/ + grader/ stay sealed (grader
+  # reads them at grade time).
+  sourceBundle: false
+  # Verifier budget restore (config-only respin, tmp/39 time-budget audit):
+  # the env's OWN shipped contract code-asserts the platform budget --
+  # grader/contract.py:139-155 PLATFORM_VERIFIER_TIMEOUT_S = 16_200 with
+  # import-time consistency asserts (WRAPPER_GRADER_TIMEOUT_S = 14_400 + 1800
+  # reserve). The earlier no-network respin reset task.toml to the 900s
+  # default off an invalid 54s nop measurement (tmp/31 N1); real mined grades
+  # run to 3662s, so every customer grade >15 min was killed at the harbor
+  # layer 18x below the env's own asserted budget. Config-only: zero effect on
+  # the grade computation -- the existing verdict carries (fleet rule).
+  verifierTimeoutSec: 16200

@@ -1,0 +1,1050 @@
+diff --git a/workspace/fit b/workspace/fit
+new file mode 100755
+index 0000000..9c53854
+--- /dev/null
++++ b/workspace/fit
+@@ -0,0 +1,446 @@
++#!/opt/svpgs-venv/bin/python
++"""GOLD and shipped reference: public-only best-of-family PGS estimator.
++
++This exact executable is both the packageable score-1 witness and the program the
++corpus builder executes to produce its reference anchors. It is not a trusted
++wrapper: it reads only the public task files and imports only its adjacent
++``pgs_core.py`` plus NumPy. Consequently score 1 is defined by executable source
++that an agent can actually submit; there is no hidden engine to imitate.
++
++Model. Covariates + intercept enter unpenalized. Every standardized genotype
++enters a single JOINT penalized logistic fit -- joint is what resolves LD, which
++is exactly what a marginal/clumping shortcut cannot do. Variant j carries prior
++variance
++
++    tau_j^2 = global^2 * s_j^2 * exp(gamma . a_j) * lambda_j
++
++with (a) s_j a class scale read through the FRACTIONAL class membership when the
++metadata carries one (so a 0.6/0.4 variant is priced at the blended scale, which
++a hard classifier cannot do), (b) gamma a coefficient vector over the continuous
++annotations named by the formula, and (c) lambda_j a heavy-tailed local
++shrinkage factor. All of it is estimated by empirical Bayes from
++E[beta_j^2] = beta_j^2 + posterior variance -- no hyperparameter is hand-set.
++
++Engineering (this is load-bearing, not incidental). At the shipped shape
++p (~2500) EXCEEDS n_train (~1800), so the textbook (p x p) normal-equation solve
++is both singular-prone and far too slow for the fit budget. Every inner solve
++therefore runs in the n-dimensional DUAL via Woodbury:
++
++    (G' W G + D)^-1  applied through  D^-1 - D^-1 G' (W^-1 + G D^-1 G')^-1 G D^-1
++
++which turns a p^3 solve into an n^3 one (~2500^3 -> ~1800^3, a ~2.7x cut) and is
++exact, not an approximation. The same factorization yields the posterior-variance
++diagonal EB needs, so the hyperparameter updates cost no extra decomposition.
++Dense near-Gaussian architectures are the important counter-regime: a plain
++joint ridge is the right estimator there.  The submission therefore reproduces
++the public best-of-family selection protocol around its independent estimators:
++compare this hierarchical estimator with a fixed-grid ridge on a deterministic,
++stratified inner split of the training
++rows; ridge must win AUC by 0.03. A positive-slope Platt map learned from the
++selected candidate's inner-validation logits calibrates its probability scale
++without changing its ranking, then the winner is refit on every training row.
++Family selection and calibration use no test input and are serialized into
++``model.out``.
++
++A wall-clock guard covers selection AND refit, not merely the winning refit.
++That accounting is load-bearing: a family selector that needs longer than the
++program's fit phase is not a reproducible model.
++"""
++from __future__ import annotations
++
++import json
++import os
++import sys
++import time
++
++import numpy as np
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++
++from pgs_core import (  # noqa: E402
++    FAMILY_WIN_MARGIN,
++    RIDGE_PENALTIES,
++    auc,
++    build_class_design,
++    build_membership,
++    continuous_annotation,
++    deterministic_stratified_inner_split,
++    fit_platt_calibrator,
++    fit_ridge_logistic,
++    linear_predict,
++    load_covariates,
++    load_genotypes,
++    load_metadata,
++    parse_formula,
++    standardize,
++)
++
++T0 = time.monotonic()
++# The public phase cap is 170 seconds.  Selection must finish early enough to leave
++# a real full-refit budget, and the whole estimator must leave room to serialize.
++# Missing either reserve fails closed instead of silently dropping a family arm.
++INNER_HIERARCHICAL_DEADLINE_S = 60.0
++SELECTION_DEADLINE_S = 100.0
++FIT_COMPUTE_DEADLINE_S = 158.0
++FIT_BUDGET_S = 165.0
++HIERARCHICAL_OUTER_ITERATIONS = 6
++
++
++def _elapsed() -> float:
++    return time.monotonic() - T0
++
++
++def main() -> None:
++    family = open("family.txt").read().strip()
++    if family != "binomial-logit":
++        raise ValueError("gold supports exactly family='binomial-logit'")
++    prior_cols, cov_cols = parse_formula(open("formula.txt").read())
++
++    sids_c, Xcov, y = load_covariates("covariates_train.csv", cov_cols, True)
++    sids_g, vids, G = load_genotypes("genotypes_train.tsv")
++    order = [{s: i for i, s in enumerate(sids_g)}[s] for s in sids_c]
++    G = G[order].astype(np.float64)
++
++    p = G.shape[1]
++
++    _, md = load_metadata("variant_metadata.tsv")
++    _, uniq = build_class_design(vids, md)
++    M = build_membership(vids, md, uniq)
++
++    # Continuous annotations: ONLY the columns the formula names. Unlisted
++    # metadata columns are not ours to use, and the decoy categories ship
++    # columns that are pure noise -- EB is what decides a decoy's gamma is ~0.
++    # variant_class is the categorical class design (build_class_design) and
++    # prior_class_members / prior_class_membership are the fractional soft-membership
++    # columns (build_membership). NONE of the three is a continuous annotation, so
++    # they must be skipped here -- otherwise continuous_annotation float()s a class
++    # list like 'inversion_bnd_complex,duplication_short' and the reference crashes,
++    # which is exactly what broke soft_membership anchor construction.
++    _MEMBERSHIP_COLS = ("variant_class", "prior_class_members", "prior_class_membership")
++    ann_cols, ann_list = [], []
++    for col in prior_cols:
++        if col in _MEMBERSHIP_COLS:
++            continue
++        vec, ok = continuous_annotation(vids, md, col)
++        if ok:
++            ann_cols.append(col)
++            ann_list.append(vec)
++    A = np.column_stack(ann_list) if ann_list else np.zeros((p, 0))
++
++    inner_train, inner_validation = deterministic_stratified_inner_split(sids_c, y)
++
++    # Hierarchical candidate on the inner training rows only.
++    G_inner, inner_mean, inner_sd = standardize(G[inner_train])
++    alpha_inner, beta_inner, recovered_inner = fit_eb(
++        G_inner,
++        Xcov[inner_train],
++        y[inner_train],
++        M,
++        A,
++        uniq,
++        deadline_s=INNER_HIERARCHICAL_DEADLINE_S,
++        n_outer=HIERARCHICAL_OUTER_ITERATIONS,
++    )
++    if (
++        recovered_inner["iterations_run"] != HIERARCHICAL_OUTER_ITERATIONS
++        or recovered_inner["deadline_reached"]
++    ):
++        raise TimeoutError("hierarchical inner candidate missed its selection reserve")
++    hierarchical_inner_model = {
++        "alpha": alpha_inner,
++        "beta": beta_inner,
++        "gmean": inner_mean,
++        "gsd": inner_sd,
++    }
++    hierarchical_validation_logits = linear_predict(
++        hierarchical_inner_model, G[inner_validation], Xcov[inner_validation]
++    )
++    hierarchical_auc = auc(y[inner_validation], hierarchical_validation_logits)
++
++    # Every predeclared ridge penalty must converge.  Selecting from a partial grid
++    # would be a different family protocol, so a missed selection reserve is fatal.
++    ridge_trials = []
++    ridge_validation_logits = []
++    selection_deadline = time.monotonic() + max(
++        SELECTION_DEADLINE_S - _elapsed(), 0.0
++    )
++    for penalty in RIDGE_PENALTIES:
++        candidate = fit_ridge_logistic(
++            G[inner_train],
++            Xcov[inner_train],
++            y[inner_train],
++            penalty,
++            deadline=selection_deadline,
++        )
++        candidate_logits = linear_predict(
++            candidate, G[inner_validation], Xcov[inner_validation]
++        )
++        candidate_auc = auc(y[inner_validation], candidate_logits)
++        ridge_trials.append(candidate_auc)
++        ridge_validation_logits.append(candidate_logits)
++    if _elapsed() >= SELECTION_DEADLINE_S:
++        raise TimeoutError("best-of-family selection exhausted its full-refit reserve")
++    ridge_index = max(range(len(ridge_trials)), key=ridge_trials.__getitem__)
++    ridge_auc = ridge_trials[ridge_index]
++    ridge_penalty = RIDGE_PENALTIES[ridge_index]
++    method = (
++        "ridge_logistic"
++        if ridge_auc > hierarchical_auc + FAMILY_WIN_MARGIN
++        else "hierarchical_eb"
++    )
++
++    # The family selector is rank-based (AUC), but the public task requires calibrated
++    # probabilities and the reward's proper-score factor is reference-relative. Learn
++    # one positive-slope Platt map on the same deterministic TRAINING-only validation
++    # slice used for selection. The positive slope preserves the selected model's AUC;
++    # the intercept and temperature correct its raw-logit probability scale. Held-out
++    # prediction rows and truth remain unopened until after every fit is complete.
++    selected_validation_logits = (
++        hierarchical_validation_logits
++        if method == "hierarchical_eb"
++        else ridge_validation_logits[ridge_index]
++    )
++    calibration = fit_platt_calibrator(
++        selected_validation_logits,
++        y[inner_validation],
++        deadline=selection_deadline,
++    )
++    if _elapsed() >= SELECTION_DEADLINE_S:
++        raise TimeoutError("best-of-family calibration exhausted its full-refit reserve")
++    selection_seconds = _elapsed()
++
++    # Refit the selected family member from scratch on all public training rows.
++    full_refit_started = time.monotonic()
++    if method == "hierarchical_eb":
++        Gstd, gmean, gsd = standardize(G)
++        alpha, beta_g, recovered = fit_eb(
++            Gstd,
++            Xcov,
++            y,
++            M,
++            A,
++            uniq,
++            deadline_s=FIT_COMPUTE_DEADLINE_S,
++            n_outer=HIERARCHICAL_OUTER_ITERATIONS,
++        )
++        if (
++            recovered["iterations_run"] != HIERARCHICAL_OUTER_ITERATIONS
++            or recovered["deadline_reached"]
++        ):
++            raise TimeoutError("hierarchical full refit missed its compute reserve")
++    else:
++        full_deadline = time.monotonic() + max(
++            FIT_COMPUTE_DEADLINE_S - _elapsed(), 0.0
++        )
++        ridge = fit_ridge_logistic(
++            G, Xcov, y, ridge_penalty, deadline=full_deadline
++        )
++        alpha = ridge["alpha"]
++        beta_g = ridge["beta"]
++        gmean = ridge["gmean"]
++        gsd = ridge["gsd"]
++        recovered = {
++            "ridge_penalty": float(ridge_penalty),
++            "ridge_iterations": int(ridge["iterations"]),
++            "ridge_relative_gradient": float(ridge["relative_gradient"]),
++        }
++    full_refit_seconds = time.monotonic() - full_refit_started
++
++    if _elapsed() >= FIT_BUDGET_S:
++        raise TimeoutError("best-of-family refit exhausted its serialization reserve")
++
++    json.dump(
++        {
++            "runtime": {"numpy_version": np.__version__},
++            "family": family,
++            "cov_cols": cov_cols,
++            "alpha": alpha.tolist(),
++            "beta": beta_g.tolist(),
++            "gmean": gmean.tolist(),
++            "gsd": gsd.tolist(),
++            "vids": list(vids),
++            "calibration_intercept": float(calibration["intercept"]),
++            "calibration_slope": float(calibration["slope"]),
++            "calibration_iterations": int(calibration["iterations"]),
++            "calibration_relative_gradient": float(calibration["relative_gradient"]),
++            "ann_cols": ann_cols,
++            "classes": list(uniq),
++            "recovered": recovered,
++            "reference_method": method,
++            "inner_selection_auc": {
++                "hierarchical_eb": float(hierarchical_auc),
++                "ridge_logistic": float(ridge_auc),
++            },
++            "inner_ridge_trials": [
++                {"penalty": float(penalty), "auc": float(trial_auc)}
++                for penalty, trial_auc in zip(RIDGE_PENALTIES, ridge_trials)
++            ],
++            "inner_hierarchical_recovered": recovered_inner,
++            "selection_seconds": float(selection_seconds),
++            "full_refit_seconds": float(full_refit_seconds),
++            "fit_seconds": _elapsed(),
++        },
++        open("model.out", "w"),
++    )
++
++
++def _irls_woodbury(Gstd, W, y, tau2, *, deadline_s, n_irls=30):
++    """Penalized IRLS for [W | Gstd]; covariates unpenalized, genotypes get
++    prior variance tau2. Solved in the n-dimensional dual (Woodbury), which is
++    exact and ~ (p/n)^3 cheaper when p > n.
++
++    Returns (coef, post_var_genotypes, deadline_reached).
++    """
++    n, p = Gstd.shape
++    kw = W.shape[1]
++    coef = np.zeros(kw + p)
++
++    deadline_reached = False
++    for _ in range(n_irls):
++        eta = W @ coef[:kw] + Gstd @ coef[kw:]
++        mu = 1.0 / (1.0 + np.exp(-np.clip(eta, -30, 30)))
++        w = np.clip(mu * (1.0 - mu), 1e-6, None)
++        z = eta + (y - mu) / w
++
++        # Weighted working solve of  min ||sqrt(w)(z - W a - G b)||^2 + sum(b^2/tau2)
++        sw = np.sqrt(w)
++        Gw = Gstd * sw[:, None]
++        Ww = W * sw[:, None]
++        zw = z * sw
++
++        # Dual form: capacitance C = I_n + Gw diag(tau2) Gw'   (n x n)
++        GT = Gw * tau2[None, :]
++        Cap = GT @ Gw.T
++        Cap[np.diag_indices_from(Cap)] += 1.0
++        try:
++            L = np.linalg.cholesky(Cap)
++        except np.linalg.LinAlgError:
++            Cap[np.diag_indices_from(Cap)] += 1e-6
++            L = np.linalg.cholesky(Cap)
++
++        def cap_solve(B):
++            return np.linalg.solve(L.T, np.linalg.solve(L, B))
++
++        # Profile out the unpenalized block: with S = (I + Gw T Gw')^-1 acting as
++        # the whitener, solve the covariate GLS then the genotype dual.
++        SW = cap_solve(Ww)
++        Sz = cap_solve(zw)
++        Acov = Ww.T @ SW
++        Acov[np.diag_indices_from(Acov)] += 1e-10
++        a_new = np.linalg.solve(Acov, Ww.T @ Sz)
++        r = zw - Ww @ a_new
++        b_new = tau2 * (Gw.T @ cap_solve(r))
++
++        step = np.concatenate([a_new, b_new]) - coef
++        coef = coef + step
++        if np.max(np.abs(step)) < 1e-7:
++            break
++        # The outer-loop guard alone cannot bound the wall clock: one IRLS sweep
++        # at the shipped shape is seconds, so an outer iteration can overshoot the
++        # cap on its own. A fit killed mid-iteration writes nothing and scores as
++        # invalid, so the deadline has to bind here too.
++        if _elapsed() > deadline_s:
++            deadline_reached = True
++            break
++
++    # Posterior variance diagonal, from the SAME Cholesky the solve already paid
++    # for:  diag((Gw'Gw + D)^-1) = diag(T - T Gw' Cap^-1 Gw T), T = diag(tau2).
++    GT = Gw * tau2[None, :]                    # (n x p)
++    Q = cap_solve(GT)                          # (n x p)
++    post_var = np.maximum(tau2 - np.einsum("ij,ij->j", GT, Q), 0.0)
++    return coef, post_var, deadline_reached
++
++
++def fit_eb(Gstd, Xcov, y, M, A, uniq, *, deadline_s, n_outer=HIERARCHICAL_OUTER_ITERATIONS):
++    """Empirical-Bayes outer loop over the prior hyperparameters."""
++    n, p = Gstd.shape
++    W = np.hstack([np.ones((n, 1)), Xcov])
++    kw = W.shape[1]
++    C = M.shape[1]
++    q = A.shape[1]
++    MtM = M.T @ M + 1e-6 * np.eye(C)
++
++    log_s = np.zeros(C)
++    gamma = np.zeros(q)
++    lam = np.ones(p)
++    # global2 is prior variance PER VARIANT, so the total prior variance it implies
++    # on the logit scale is ~ p * global2. Starting it at 1.0 asserts a total of
++    # ~2500 for a trait whose reference AUC is ~0.64 -- absurd by three orders of
++    # magnitude, and the damped updates below then spend the whole iteration budget
++    # crawling back down. Measured: from global2=1.0 the loop was still descending
++    # at iteration 7 (tau2_med 0.079, i.e. a prior SD of 0.28 PER standardized
++    # variant), so the fit that got serialized was massively under-shrunk, fit
++    # noise, and scored BELOW a covariates-only GLM. Start where a polygenic trait
++    # actually lives: total prior variance of order 1, spread over p variants.
++    global2 = 1.0 / max(p, 1)
++
++    def baseline_var():
++        sv = np.exp(np.clip(M @ log_s, -12, 12))
++        mod = np.exp(np.clip(A @ gamma, -12, 12)) if q else 1.0
++        return np.maximum(global2 * sv**2 * mod, 1e-10)
++
++    coef = np.zeros(kw + p)
++    deadline_reached = False
++    for _ in range(n_outer):
++        bvar = baseline_var()
++        tau2 = np.maximum(bvar * lam, 1e-10)
++        coef, post_var, irls_deadline_reached = _irls_woodbury(
++            Gstd, W, y, tau2, deadline_s=deadline_s
++        )
++        deadline_reached = deadline_reached or irls_deadline_reached
++
++        b2 = coef[kw:] ** 2 + post_var
++        bvar = baseline_var()
++        lam = np.clip(0.5 * lam + 0.5 * (b2 / np.maximum(bvar, 1e-10)), 1e-6, 1e6)
++
++        mod = np.exp(np.clip(A @ gamma, -12, 12)) if q else np.ones(p)
++        denom = np.maximum(global2 * mod * lam, 1e-12)
++        target = np.log(np.maximum(b2, 1e-12)) - np.log(denom)
++        if not np.all(np.isfinite(target)):
++            raise ValueError("hierarchical class-scale update became non-finite")
++        target = np.clip(target, -24, 24)
++        log_s = np.clip(0.5 * log_s + 0.5 * (0.5 * np.linalg.solve(MtM, M.T @ target)), -12, 12)
++        log_s = log_s - float(np.mean(log_s))    # class scales carry SHAPE only ...
++
++        # ... and the LEVEL is set here, by the closed-form empirical-Bayes moment
++        # update rather than by a damped fixed-point step. global2 is the one
++        # hyperparameter whose scale is both unknown a priori and enormously
++        # consequential (it multiplies every variant's prior variance), so folding
++        # it through the same 0.5-damped recursion as everything else made its
++        # convergence geometric: measured from the old global2=1.0 start, the loop
++        # was still descending at iteration 7 and serialized a fit that was still
++        # ~2 orders of magnitude under-shrunk. E[beta_j^2] = tau2_j at the EB fixed
++        # point, so the level that satisfies that in one step is just the mean of
++        # b2 over its own baseline -- no damping needed, and it lands immediately
++        # instead of asymptotically.
++        sv2 = np.exp(np.clip(2.0 * (M @ log_s), -24, 24))
++        mod_now = np.exp(np.clip(A @ gamma, -12, 12)) if q else np.ones(p)
++        unit_var = np.maximum(sv2 * mod_now * lam, 1e-12)
++        global2 = float(np.clip(np.mean(b2 / unit_var), 1e-12, 1e6))
++
++        if q:
++            sv = np.exp(np.clip(M @ log_s, -12, 12))
++            base_wo = np.maximum(global2 * sv**2 * lam, 1e-12)
++            resp = np.log(np.maximum(b2, 1e-12)) - np.log(base_wo)
++            if not np.all(np.isfinite(resp)):
++                raise ValueError("hierarchical annotation update became non-finite")
++            resp = np.clip(resp, -24, 24)
++            AtA = A.T @ A + 1e-6 * np.eye(q)
++            gamma = np.clip(0.5 * gamma + 0.5 * (0.5 * np.linalg.solve(AtA, A.T @ resp)), -3.0, 3.0)
++
++        if _elapsed() > deadline_s:
++            deadline_reached = True
++            break
++
++    recovered = {
++        "log_s": {str(u): float(log_s[i]) for i, u in enumerate(uniq)},
++        "gamma": gamma.tolist(),
++        "global_scale": float(np.sqrt(global2)),
++        "iterations_run": int(_ + 1),
++        "deadline_reached": bool(deadline_reached),
++    }
++    return coef[:kw], coef[kw:], recovered
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/workspace/pgs_core.py b/workspace/pgs_core.py
+new file mode 100644
+index 0000000..e1659fb
+--- /dev/null
++++ b/workspace/pgs_core.py
+@@ -0,0 +1,529 @@
++"""IO + design helpers shared by the gold submission's fit and predict.
++
++Formula parsing, CSV/TSV reading, class design, fractional class membership,
++standardization, the deterministic public inner split, exact AUC, and the
++standalone fixed-ridge candidate. The heavier hierarchical estimator remains in
++``gold/fit``; predict imports this module without executing any fitting work.
++"""
++from __future__ import annotations
++
++import hashlib
++import re
++import time
++
++import numpy as np
++
++
++# Forty percent gives the two-family selector and two-parameter calibrator enough
++# independent public-training evidence to avoid noisy family flips. The winning
++# estimator is still refit on every training row, so this does not discard final-fit data.
++INNER_VALIDATION_FRACTION = 0.4
++INNER_SPLIT_SEED = 20260718
++RIDGE_PENALTIES = (0.3, 0.1, 0.03, 0.01, 0.003, 0.001)
++# The family decision is estimated on public-training validation rows. Ridge must
++# clear a real uncertainty guard rather than win on sampling noise; otherwise the
++# structured hierarchical incumbent is retained. Dense Gaussian regimes clear 0.03
++# comfortably, while noisy near-ties no longer flip to a brittle reference family.
++FAMILY_WIN_MARGIN = 0.03
++PLATT_MAX_ITERATIONS = 100
++PLATT_RELATIVE_GRADIENT_TOLERANCE = 1e-8
++# The inner validation slice is only ~20% of training and can be nearly separated.
++# A real ridge is necessary: an epsilon penalty lets the slope explode, saturating
++# held-out probabilities and destroying both proper scores and floating-point rank
++# resolution. This fixed, public value regularizes only the two calibration parameters.
++PLATT_L2 = 1e-3
++PLATT_MINIMUM_SLOPE = 1e-8
++
++
++def _split_terms(inner):
++    """Split a `pgs(...)` / `covariate(...)` body on EITHER separator.
++
++    The formula grammar allows `+` or `,` between names, either may appear, and
++    both may appear in the same corpus. Splitting on one separator only (the
++    older helper split pgs() on `+` and covariate() on `,`) silently collapses a
++    comma-separated list into a single bogus column name like 'age, sex, pc1',
++    which then matches no column -- so the model quietly drops every covariate
++    instead of failing loudly. Treat the two separators identically.
++    """
++    return [t.strip() for t in re.split(r"[+,]", inner) if t.strip()]
++
++
++def parse_formula(text):
++    """y ~ pgs(a + b) + covariate(c, d)  ->  (prior_cols, cov_cols)."""
++    prior_cols, cov_cols = [], []
++    rhs = text.split("~", 1)[1] if "~" in text else text
++    m = re.search(r"pgs\(([^)]*)\)", rhs)
++    if m:
++        prior_cols = _split_terms(m.group(1))
++    m = re.search(r"covariate\(([^)]*)\)", rhs)
++    if m:
++        cov_cols = _split_terms(m.group(1))
++    return prior_cols, cov_cols
++
++
++def read_csv(path):
++    with open(path) as fh:
++        header = fh.readline().strip().split(",")
++        rows = [ln.rstrip("\n").split(",") for ln in fh if ln.strip()]
++    return header, rows
++
++
++def read_tsv(path):
++    with open(path) as fh:
++        header = fh.readline().strip().split("\t")
++        rows = [ln.rstrip("\n").split("\t") for ln in fh if ln.strip()]
++    return header, rows
++
++
++def load_genotypes(path):
++    header, rows = read_tsv(path)
++    vids = header[1:]
++    sids = [r[0] for r in rows]
++    G = np.array([[float(x) for x in r[1:]] for r in rows], dtype=np.float64)
++    return sids, vids, G
++
++
++def load_covariates(path, cov_cols, want_y):
++    header, rows = read_csv(path)
++    idx = {h: i for i, h in enumerate(header)}
++    sids = [r[idx["sample_id"]] for r in rows]
++    X = np.array([[float(r[idx[c]]) for c in cov_cols] for r in rows], dtype=np.float64)
++    y = None
++    if want_y and "y" in idx:
++        y = np.array([float(r[idx["y"]]) for r in rows], dtype=np.float64)
++    return sids, X, y
++
++
++def load_metadata(path):
++    header, rows = read_tsv(path)
++    idx = {h: i for i, h in enumerate(header)}
++    md = {}
++    for r in rows:
++        md[r[idx["variant_id"]]] = {h: r[i] for h, i in idx.items()}
++    return header, md
++
++
++def build_class_design(vids, md):
++    """Return per-variant class label array + sorted class list."""
++    classes = [md[v]["variant_class"] for v in vids]
++    if any(not value for value in classes):
++        raise ValueError("variant_class must be present for every public variant")
++    uniq = sorted(set(classes))
++    return np.array(classes), uniq
++
++
++def build_membership(vids, md, uniq):
++    """Fractional class-membership matrix M (P x C).
++
++    Default = hard 1-of-C from variant_class. If the metadata carries
++    `prior_class_members` (comma list of class tokens) + `prior_class_membership`
++    (comma list of weights), use the fractional membership -- this is what the
++    soft_membership datasets are generated from, so a model that honors it prices
++    those variants' priors correctly (a hard classifier cannot)."""
++    cidx = {c: i for i, c in enumerate(uniq)}
++    P, C = len(vids), len(uniq)
++    M = np.zeros((P, C))
++    for j, v in enumerate(vids):
++        rec = md[v]
++        members_present = "prior_class_members" in rec
++        weights_present = "prior_class_membership" in rec
++        if members_present is not weights_present:
++            raise ValueError("soft-membership columns must appear together")
++        members = rec["prior_class_members"] if members_present else ""
++        weights = rec["prior_class_membership"] if weights_present else ""
++        if members_present and (not members or not weights):
++            raise ValueError("soft-membership values must be non-empty")
++        used = False
++        if members and weights:
++            toks = [t.strip() for t in members.split(",") if t.strip()]
++            ws = [float(x) for x in weights.split(",")]
++            if (
++                not toks or len(toks) != len(ws)
++                or any(t not in cidx for t in toks)
++                or any(not np.isfinite(w) or w < 0.0 for w in ws)
++                or not np.isclose(sum(ws), 1.0, rtol=0.0, atol=1e-6)
++            ):
++                raise ValueError("soft class membership is invalid")
++            for t, w in zip(toks, ws):
++                M[j, cidx[t]] += w
++                used = True
++        if not used:
++            c = rec["variant_class"]
++            if c not in cidx:
++                raise ValueError("variant class is outside the declared class design")
++            M[j, cidx[c]] = 1.0
++    return M
++
++
++def continuous_annotation(vids, md, col):
++    """Standardized continuous annotation vector (0 if absent)."""
++    vals = []
++    for v in vids:
++        if col not in md[v]:
++            raise ValueError(f"formula annotation {col!r} is missing")
++        s = md[v][col]
++        try:
++            vals.append(float(s))
++        except (ValueError, TypeError) as exc:
++            raise ValueError(f"formula annotation {col!r} is invalid") from exc
++    x = np.array(vals)
++    if x.std() < 1e-9:
++        return np.zeros(len(vids)), False
++    return (x - x.mean()) / (x.std() + 1e-12), True
++
++
++def standardize(G):
++    mean = G.mean(0)
++    css = ((G - mean) ** 2).sum(0)
++    sd = np.sqrt(css / G.shape[0])
++    sd = np.where(sd < 1e-6, 1.0, sd)
++    return (G - mean) / sd, mean, sd
++
++
++def deterministic_stratified_inner_split(sample_ids, targets):
++    """Exact public-training split used by the shipped family selector.
++
++    Rows are ranked independently within each outcome class by SHA-256 of the
++    public sample id and the fixed protocol seed.  No filesystem path, row
++    position, category label, or held-out value participates in selection.
++    """
++    ids = tuple(sample_ids)
++    y = np.asarray(targets, dtype=np.float64).reshape(-1)
++    if len(ids) != y.size or len(ids) < 4 or len(set(ids)) != len(ids):
++        raise ValueError("inner split inputs have inconsistent or duplicate rows")
++    if any(not isinstance(value, str) or not value for value in ids):
++        raise ValueError("inner split sample IDs must be non-empty strings")
++    if set(np.unique(y)) != {0.0, 1.0}:
++        raise ValueError("inner split requires both binary outcome classes")
++
++    validation_indices = []
++    for target_value in (0.0, 1.0):
++        class_indices = np.flatnonzero(y == target_value)
++        if class_indices.size < 2:
++            raise ValueError("each class needs at least two inner-split rows")
++
++        def stable_key(index):
++            payload = f"{INNER_SPLIT_SEED}\0{ids[index]}".encode("utf-8")
++            return hashlib.sha256(payload).digest(), ids[index]
++
++        ranked = sorted((int(index) for index in class_indices), key=stable_key)
++        count = int(round(INNER_VALIDATION_FRACTION * len(ranked)))
++        count = min(max(count, 1), len(ranked) - 1)
++        validation_indices.extend(ranked[:count])
++
++    validation = np.asarray(sorted(validation_indices), dtype=np.int64)
++    mask = np.ones(y.size, dtype=bool)
++    mask[validation] = False
++    training = np.flatnonzero(mask).astype(np.int64, copy=False)
++    if set(np.unique(y[training])) != {0.0, 1.0}:
++        raise ValueError("inner training split lost an outcome class")
++    return training, validation
++
++
++def auc(targets, scores):
++    """Binary AUC with stable average ranks for ties (the shipped definition)."""
++    y = np.asarray(targets, dtype=np.float64).reshape(-1)
++    score = np.asarray(scores, dtype=np.float64).reshape(-1)
++    if y.size != score.size or not np.all(np.isfinite(score)):
++        raise ValueError("AUC inputs are invalid")
++    order = np.argsort(score, kind="mergesort")
++    ordered = score[order]
++    ranks_ordered = np.arange(1, score.size + 1, dtype=np.float64)
++    start = 0
++    while start < score.size:
++        end = start
++        while end + 1 < score.size and ordered[end + 1] == ordered[start]:
++            end += 1
++        if end > start:
++            ranks_ordered[start:end + 1] = (start + 1 + end + 1) / 2.0
++        start = end + 1
++    ranks = np.empty(score.size, dtype=np.float64)
++    ranks[order] = ranks_ordered
++    positives = float(np.sum(y == 1.0))
++    negatives = float(np.sum(y == 0.0))
++    if positives == 0.0 or negatives == 0.0:
++        raise ValueError("AUC needs both outcome classes")
++    return float(
++        (np.sum(ranks[y == 1.0]) - positives * (positives + 1.0) / 2.0)
++        / (positives * negatives)
++    )
++
++
++def fit_platt_calibrator(logits, targets, *, deadline=None):
++    """Fit a deterministic two-parameter Platt map on training-only logits.
++
++    The returned map is ``sigmoid(intercept + slope * raw_logit)``.  The
++    optimizer works on standardized logits for conditioning, then translates
++    the coefficients back to the raw-logit scale.  A tiny fixed L2 term makes
++    the Newton system well-defined under near-separation without materially
++    changing the calibration target.  Backtracking enforces descent and a
++    strictly positive slope, so calibration preserves the selected model's
++    ranking (and therefore its AUC).  Invalid, unidentifiable, non-converged, or
++    non-positive-slope fits fail closed; there is no identity-map fallback.
++    """
++    score = np.asarray(logits, dtype=np.float64).reshape(-1)
++    y = np.asarray(targets, dtype=np.float64).reshape(-1)
++    if (
++        score.size != y.size
++        or score.size < 4
++        or not np.all(np.isfinite(score))
++        or not np.all(np.isfinite(y))
++        or set(np.unique(y)) != {0.0, 1.0}
++    ):
++        raise ValueError("Platt calibration requires finite logits and both binary classes")
++    score_mean = float(np.mean(score))
++    score_scale = float(np.std(score))
++    if not np.isfinite(score_scale) or score_scale <= 1e-12:
++        raise ValueError("Platt calibration logits have no identifiable scale")
++    standardized = (score - score_mean) / score_scale
++    design = np.column_stack([np.ones(score.size, dtype=np.float64), standardized])
++
++    prevalence = float(np.mean(y))
++    coefficients = np.asarray(
++        [np.log(prevalence / (1.0 - prevalence)), 1.0], dtype=np.float64
++    )
++
++    def objective_gradient_hessian(candidate):
++        eta = design @ candidate
++        probability = 1.0 / (1.0 + np.exp(-np.clip(eta, -40.0, 40.0)))
++        value = float(
++            np.mean(np.logaddexp(0.0, eta) - y * eta)
++            + 0.5 * PLATT_L2 * np.dot(candidate, candidate)
++        )
++        gradient = design.T @ (probability - y) / y.size + PLATT_L2 * candidate
++        weight = probability * (1.0 - probability)
++        hessian = (design.T * weight) @ design / y.size
++        hessian += PLATT_L2 * np.eye(2, dtype=np.float64)
++        return value, gradient, hessian
++
++    initial_gradient_norm = None
++    relative_gradient = float("inf")
++    converged = False
++    for iteration in range(PLATT_MAX_ITERATIONS):
++        if deadline is not None and time.monotonic() >= deadline:
++            raise TimeoutError("Platt calibration exceeded its fit-time reserve")
++        value, gradient, hessian = objective_gradient_hessian(coefficients)
++        gradient_norm = float(np.linalg.norm(gradient))
++        if initial_gradient_norm is None:
++            initial_gradient_norm = max(gradient_norm, 1e-30)
++        relative_gradient = gradient_norm / initial_gradient_norm
++        if relative_gradient <= PLATT_RELATIVE_GRADIENT_TOLERANCE:
++            converged = True
++            break
++        try:
++            direction = -np.linalg.solve(hessian, gradient)
++        except np.linalg.LinAlgError as exc:
++            raise ValueError("Platt calibration Newton system is singular") from exc
++        directional_derivative = float(np.dot(gradient, direction))
++        if (
++            not np.all(np.isfinite(direction))
++            or not np.isfinite(directional_derivative)
++            or directional_derivative >= 0.0
++        ):
++            raise ValueError("Platt calibration Newton direction is invalid")
++
++        step = 1.0
++        if direction[1] < 0.0:
++            positive_step = (
++                coefficients[1] - PLATT_MINIMUM_SLOPE
++            ) / -direction[1]
++            step = min(step, 0.99 * positive_step)
++        accepted = False
++        for _ in range(60):
++            if deadline is not None and time.monotonic() >= deadline:
++                raise TimeoutError("Platt calibration exceeded its fit-time reserve")
++            proposal = coefficients + step * direction
++            if proposal[1] > PLATT_MINIMUM_SLOPE and np.all(np.isfinite(proposal)):
++                proposal_value = objective_gradient_hessian(proposal)[0]
++                if proposal_value <= value + 1e-4 * step * directional_derivative:
++                    coefficients = proposal
++                    accepted = True
++                    break
++            step *= 0.5
++        if not accepted:
++            raise ValueError("Platt calibration backtracking failed")
++    if not converged:
++        raise ValueError(
++            "Platt calibration did not converge "
++            f"(relative gradient {relative_gradient:.3g})"
++        )
++
++    slope = float(coefficients[1] / score_scale)
++    intercept = float(coefficients[0] - coefficients[1] * score_mean / score_scale)
++    if (
++        not np.isfinite(intercept)
++        or not np.isfinite(slope)
++        or slope <= 0.0
++    ):
++        raise ValueError("Platt calibration produced invalid raw-logit coefficients")
++    return {
++        "intercept": intercept,
++        "slope": slope,
++        "iterations": int(iteration + 1),
++        "relative_gradient": float(relative_gradient),
++    }
++
++
++def fit_ridge_logistic(genotypes, covariates, targets, penalty, *, deadline=None):
++    """Fit the selector's fixed-penalty ridge logistic candidate from scratch.
++
++    This is a standalone NumPy implementation of the public estimator contract:
++    standardized genotypes, standardized nuisance covariates, an unpenalized
++    intercept, 1e-8 nuisance L2, and FISTA with the shipped 500-iteration/1e-5
++    convergence controls.  A missed deadline is an error; silently selecting from
++    an incomplete penalty grid would no longer reproduce best-of-family.
++    """
++    G = np.asarray(genotypes, dtype=np.float64)
++    C = np.asarray(covariates, dtype=np.float64)
++    y = np.asarray(targets, dtype=np.float64).reshape(-1)
++    if (
++        G.ndim != 2
++        or C.ndim != 2
++        or G.shape[0] != C.shape[0]
++        or G.shape[0] != y.size
++        or set(np.unique(y)) != {0.0, 1.0}
++        or not np.all(np.isfinite(G))
++        or not np.all(np.isfinite(C))
++        or not np.isfinite(penalty)
++        or penalty <= 0.0
++    ):
++        raise ValueError("ridge candidate received invalid public training data")
++
++    def ridge_standardize(values):
++        mean = values.mean(axis=0)
++        centered = values - mean
++        scale = np.sqrt(
++            np.einsum("ij,ij->j", centered, centered) / max(values.shape[0], 1)
++        )
++        scale = np.where(scale < 1e-8, 1.0, scale)
++        return centered / scale, mean, scale
++
++    Gs, gmean, gsd = ridge_standardize(G)
++    Cs, cmean, csd = ridge_standardize(C)
++    nuisance_count = C.shape[1]
++    design = np.empty((y.size, 1 + nuisance_count + G.shape[1]), dtype=np.float64)
++    design[:, 0] = 1.0
++    design[:, 1:1 + nuisance_count] = Cs
++    design[:, 1 + nuisance_count:] = Gs
++    genetic_start = 1 + nuisance_count
++    l2 = np.zeros(design.shape[1], dtype=np.float64)
++    l2[1:genetic_start] = 1e-8
++    l2[genetic_start:] = float(penalty)
++
++    def objective_and_gradient(beta):
++        logits = np.clip(design @ beta, -30.0, 30.0)
++        value = float(
++            np.mean(np.logaddexp(0.0, logits) - y * logits)
++            + 0.5 * np.dot(l2, beta * beta)
++        )
++        probability = 1.0 / (1.0 + np.exp(-logits))
++        gradient = design.T @ (probability - y) / y.size + l2 * beta
++        return value, gradient
++
++    def objective(beta):
++        logits = np.clip(design @ beta, -30.0, 30.0)
++        return float(
++            np.mean(np.logaddexp(0.0, logits) - y * logits)
++            + 0.5 * np.dot(l2, beta * beta)
++        )
++
++    coefficients = np.zeros(design.shape[1], dtype=np.float64)
++    extrapolated = coefficients.copy()
++    acceleration = 1.0
++    lipschitz = 1.0
++    initial_gradient_norm = np.linalg.norm(
++        objective_and_gradient(coefficients)[1]
++    ) + 1e-30
++    converged = False
++    relative_gradient = float("inf")
++    for iteration in range(500):
++        if deadline is not None and time.monotonic() >= deadline:
++            raise TimeoutError("ridge family selection exceeded its fit-time reserve")
++        value, gradient = objective_and_gradient(extrapolated)
++        trial = max(lipschitz * 0.5, 1e-8)
++        while True:
++            proposal = extrapolated - gradient / trial
++            difference = proposal - extrapolated
++            bound = (
++                value
++                + float(np.dot(gradient, difference))
++                + 0.5 * trial * float(np.dot(difference, difference))
++            )
++            if objective(proposal) <= bound + 1e-12:
++                break
++            trial *= 2.0
++            if not np.isfinite(trial):
++                raise ValueError("ridge candidate backtracking diverged")
++        lipschitz = trial
++        if float(np.dot(extrapolated - proposal, proposal - coefficients)) > 0.0:
++            acceleration = 1.0
++        next_acceleration = 0.5 * (
++            1.0 + np.sqrt(1.0 + 4.0 * acceleration * acceleration)
++        )
++        extrapolated = proposal + ((acceleration - 1.0) / next_acceleration) * (
++            proposal - coefficients
++        )
++        coefficients = proposal
++        acceleration = next_acceleration
++        relative_gradient = float(
++            np.linalg.norm(objective_and_gradient(coefficients)[1])
++            / initial_gradient_norm
++        )
++        if relative_gradient <= 1e-5:
++            converged = True
++            break
++    if not converged:
++        raise ValueError(
++            f"ridge candidate did not converge at penalty {penalty:g} "
++            f"(relative gradient {relative_gradient:.3g})"
++        )
++
++    covariate_coefficients = coefficients[1:genetic_start] / csd
++    intercept = float(coefficients[0] - np.dot(cmean, covariate_coefficients))
++    return {
++        "alpha": np.concatenate([[intercept], covariate_coefficients]),
++        "beta": coefficients[genetic_start:],
++        "gmean": gmean,
++        "gsd": gsd,
++        "iterations": int(iteration + 1),
++        "relative_gradient": relative_gradient,
++    }
++
++
++def linear_predict(model, genotypes, covariates):
++    """Apply either standalone family candidate on its standardized axes."""
++    G = np.asarray(genotypes, dtype=np.float64)
++    C = np.asarray(covariates, dtype=np.float64)
++    standardized = (G - np.asarray(model["gmean"])) / np.asarray(model["gsd"])
++    nuisance = np.hstack([np.ones((G.shape[0], 1)), C])
++    logits = nuisance @ np.asarray(model["alpha"]) + standardized @ np.asarray(model["beta"])
++    if not np.all(np.isfinite(logits)):
++        raise ValueError("family candidate produced non-finite logits")
++    return np.asarray(logits, dtype=np.float64)
++
++
++def predict_probability(model, genotypes, covariates):
++    """Authoritative probability postprocessing for gold and corpus anchors."""
++    logits = linear_predict(model, genotypes, covariates)
++    try:
++        calibration_intercept = float(model["calibration_intercept"])
++        calibration_slope = float(model["calibration_slope"])
++    except (KeyError, TypeError, ValueError) as exc:
++        raise ValueError("public reference calibration coefficients are missing or invalid") from exc
++    if (
++        not np.isfinite(calibration_intercept)
++        or not np.isfinite(calibration_slope)
++        or calibration_slope <= 0.0
++    ):
++        raise ValueError("public reference calibration coefficients are invalid")
++    calibrated_logits = calibration_intercept + calibration_slope * logits
++    if not np.all(np.isfinite(calibrated_logits)):
++        raise ValueError("public reference produced non-finite calibrated logits")
++    # Keep probabilities strictly inside (0, 1), even for extreme extrapolation.
++    # The selected model's ranking is determined before this monotone numerical guard.
++    probability = 1.0 / (
++        1.0 + np.exp(-np.clip(calibrated_logits, -30.0, 30.0))
++    )
++    if not np.all(np.isfinite(probability)):
++        raise ValueError("public reference produced non-finite probabilities")
++    return np.asarray(probability, dtype=np.float64)
+diff --git a/workspace/predict b/workspace/predict
+new file mode 100755
+index 0000000..231d9ac
+--- /dev/null
++++ b/workspace/predict
+@@ -0,0 +1,57 @@
++#!/opt/svpgs-venv/bin/python
++"""GOLD predict: apply the selected public family model to the held-out cohort.
++
++Both hierarchical empirical Bayes and ridge serialize the same linear-logit
++representation and a training-only positive-slope Platt map, so prediction is a
++standardization, two dot products, and an affine logit calibration. It aligns the test
++genotype columns to the variant order the fit serialized (never assuming the
++test file repeats the training column layout) and emits a calibrated probability
++per test row, in input order.
++"""
++from __future__ import annotations
++
++import json
++import os
++import sys
++
++import numpy as np
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++
++from pgs_core import load_covariates, load_genotypes, predict_probability  # noqa: E402
++
++
++def main() -> None:
++    model = json.load(open("model.out"))
++    cov_cols = model["cov_cols"]
++    sids_c, Xcov, _ = load_covariates("covariates_test.csv", cov_cols, False)
++    sids_g, vids, G = load_genotypes("genotypes_test.tsv")
++
++    order = [{s: i for i, s in enumerate(sids_g)}[s] for s in sids_c]
++    G = G[order].astype(np.float64)
++
++    # Align by public variant ID, but fail closed if the two files do not contain
++    # the exact same unique set. Zero-filling a missing fitted variant would be a
++    # different model and would conceal a broken task contract.
++    fit_vids = model["vids"]
++    if len(set(vids)) != len(vids) or len(set(fit_vids)) != len(fit_vids):
++        raise ValueError("prediction or fitted variant IDs are duplicated")
++    if set(fit_vids) != set(vids):
++        raise ValueError("prediction variant IDs do not match the fitted model")
++    if list(fit_vids) != list(vids):
++        pos = {v: j for j, v in enumerate(vids)}
++        G = G[:, [pos[v] for v in fit_vids]]
++
++    mean = predict_probability(model, G, Xcov)
++
++    with open("pred.csv", "w") as fh:
++        fh.write("mean\n")
++        for value in mean:
++            # Seventeen significant digits round-trip a float64, so the packaged
++            # witness and the builder score the same probabilities rather than a
++            # separately rounded approximation.
++            fh.write(f"{value:.17g}\n")
++
++
++if __name__ == "__main__":
++    main()

@@ -1,0 +1,16 @@
+# Solve-time (AGENT) Python dependencies — the minimal runtime the prompt's local
+# dev loop needs: numpy + CPU torch, enough to `import varseq.oracle`, call
+# `load_oracle()`, and run a numpy/torch design search against it.
+#
+# Installed at setupProblem (image-BUILD) time into an agent-owned venv
+# (workspace/.venv) — the SOLVE phase has no internet, so the agent cannot
+# install anything itself; provisioning must happen at build. Kept deliberately
+# SLIM (NOT the full grade closure in requirements-test.txt): baking the whole
+# multi-GB runtime into the image is wasteful, and every observed rollout drives
+# design() with numpy/torch alone (the heavy varseq toolbox is not load-bearing —
+# see task-docs/seq-design/build-log.md tool-ablation result). Pins match the
+# grade closure so local dev behaviour matches grading.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+numpy==2.0.2
+torch==2.8.0+cpu

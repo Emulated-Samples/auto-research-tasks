@@ -1,0 +1,9 @@
+#!/opt/svpgs-venv/bin/python
+import csv, json
+
+p = json.load(open("model.out"))["p"]
+n = sum(1 for _ in csv.DictReader(open("covariates_test.csv")))
+with open("pred.csv", "w") as fh:
+    fh.write("mean\n")
+    for _ in range(n):
+        fh.write(f"{p:.8f}\n")

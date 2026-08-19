@@ -1,0 +1,17 @@
+{
+    "task": {
+        "path": "tasks/training-task-samples/manifold-representation"
+    },
+    "trial_name": "manifold-representation__jarEzXY",
+    "trials_dir": "/home/ubuntu/jobs/k5b/manifold-representation/2026-08-18__04-27-45",
+    "agent": {
+        "name": "claude-code",
+        "model_name": "claude-opus-5",
+        "extra_allowed_hosts": [
+            "api.anthropic.com",
+            "statsig.anthropic.com",
+            "sentry.io"
+        ]
+    },
+    "job_id": "c9ec8bfd-5c0a-4695-9322-5e369f880b6b"
+}

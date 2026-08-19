@@ -1,0 +1,446 @@
+"""
+`varseq.interpret.motifs contains functions related to manipulating sequence motifs
+and scanning DNA sequences with motifs. Note that the aim here is not to provide
+a comprehensive suite of functions related to motif analysis, but only the
+functionality necessary for interpreting sequence-to-function deep learning models
+using these motifs.
+"""
+
+from typing import Dict, Generator, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+from torch import Tensor
+
+from varseq.io.motifs import read_meme_file
+from varseq.utils import make_list
+
+
+def motifs_to_strings(
+    motifs: Union[np.ndarray, Dict[str, np.ndarray], str],
+    names: Optional[List[str]] = None,
+    sample: bool = False,
+    rng: Optional[Generator] = None,
+) -> str:
+    """
+    Extracts a matching DNA sequence from a motif. If sample=True, the best match sequence
+    is returned, otherwise a sequence is sampled from the probability distribution at each
+    position of the motif.
+
+    Args:
+        motifs: Either a numpy array containing a Position Probability
+            Matrix (PPM) of shape (4, L), or a dictionary containing
+            motif names as keys and PPMs of shape (4, L) as values, or the
+            path to a MEME file.
+        names: A list of motif names to read from the MEME file, in case a
+            MEME file is supplied in motifs. If None, all motifs in the
+            file will be read.
+        sample: If True, a sequence will be sampled from the motif.
+            Otherwise, the best match sequence will be returned.
+        rng: np.random.RandomState object
+
+    Returns:
+        DNA sequence(s) as strings
+    """
+    from varseq.sequence.format import indices_to_strings
+
+    # Set random seed
+    rng = rng or np.random.RandomState(seed=None)
+
+    # Convert a single motif
+    if isinstance(motifs, np.ndarray):
+        # Extract sequence as indices
+        if sample:
+            indices = np.array(
+                [rng.multinomial(1, pos).argmax() for pos in motifs.T], dtype=np.int8
+            )
+        else:
+            indices = motifs.argmax(0).astype(np.int8)
+
+        # Return strings
+        return indices_to_strings(indices)
+
+    # Convert multiple motifs
+    elif isinstance(motifs, dict):
+        return [
+            motifs_to_strings(motif, rng=rng, sample=sample)
+            for motif in motifs.values()
+        ]
+    else:
+        motifs = read_meme_file(motifs, names=make_list(names))
+        return motifs_to_strings(motifs, rng=rng, sample=sample)
+
+
+def trim_pwm(
+    pwm: np.ndarray,
+    trim_threshold: float = 0.3,
+    return_indices: bool = False,
+) -> Union[Tuple[int], np.ndarray]:
+    """
+    Trims the edges of a Position Weight Matrix (PWM) based on the
+    information content of each position.
+
+    Args:
+        pwm: A numpy array of shape (4, L) containing the PWM
+        trim_threshold: Threshold ranging from 0 to 1 to trim edge positions
+        return_indices: If True, only the indices of the positions to keep
+            will be returned. If False, the trimmed motif will be returned.
+
+    Returns:
+        np.array containing the trimmed PWM (if return_indices = True) or a
+        tuple of ints for the start and end positions of the trimmed motif
+        (if return_indices = False).
+    """
+    # Get per position score
+    score = np.sum(np.abs(pwm), axis=0)
+
+    # Calculate score threshold
+    trim_thresh = np.max(score) * trim_threshold
+
+    # Get indices that pass the threshold
+    pass_inds = np.where(score >= trim_thresh)[0]
+
+    # Get the start and end of the trimmed motif
+    start = max(np.min(pass_inds), 0)
+    end = min(np.max(pass_inds) + 1, len(score) + 1)
+
+    if return_indices:
+        return start, end
+    else:
+        return pwm[:, start:end]
+
+
+def scan_sequences(
+    seqs: Union[str, List[str]],
+    motifs: Union[str, Dict[str, np.ndarray]],
+    names: Optional[List[str]] = None,
+    seq_ids: Optional[List[str]] = None,
+    pthresh: float = 1e-3,
+    rc: bool = True,
+    bin_size: float = 0.1,
+    eps: float = 0.0001,
+    attrs: Optional[np.ndarray] = None,
+):
+    """
+    Scan a DNA sequence using motifs. Based on https://github.com/jmschrei/memesuite-lite.
+
+    Args:
+        seqs: A string or a list of DNA sequences as strings
+        motifs: A dictionary whose values are Position Probability Matrices
+            (PPMs) of shape (4, L), or the path to a MEME file.
+        names: A list of motif names to read from the MEME file.
+            If None, all motifs in the file will be read.
+        seq_ids: Optional list of IDs for sequences
+        pthresh: p-value cutoff for binding sites
+        rc: If True, both the sequence and its reverse complement will be
+            scanned. If False, only the given sequence will be scanned.
+        bin_size: The size of the bins discretizing the PWM scores. The smaller
+            the bin size the higher the resolution, but the less data may be
+            available to support it. Default is 0.1.
+        eps: A small pseudocount to add to the motif PPMs before taking the log.
+                Default is 0.0001.
+        attrs: An optional numpy array of shape (B, 4, L) containing attributions
+                for the input sequences. If provided, the results will include site
+                attribution and motif attribution scores for each FIMO hit.
+
+    Returns:
+        pd.DataFrame containing columns 'motif', 'sequence', 'start', 'end',
+        'strand', 'score', 'pval', and 'matched_seq'.
+    """
+    from memelite import fimo
+
+    # Format sequences
+    seqs = make_list(seqs)
+    seq_ids = seq_ids or [str(i) for i in range(len(seqs))]
+
+    # Format motifs
+    if isinstance(motifs, str):
+        motifs = read_meme_file(motifs, names=names)
+
+    import tempfile
+
+    # write sequences to fasta file
+    tmp_seq_dir_path = tempfile.mkdtemp()
+    tmp_seq_file_path = f"{tmp_seq_dir_path}/my_seq.fasta"
+    tmpf_seq_fp = open(tmp_seq_file_path, "w")
+    for i, (seq, seq_id) in enumerate(zip(seqs, seq_ids)):
+        tmpf_seq_fp.write(">" + seq_id + "\n" + seq + "\n\n")
+    tmpf_seq_fp.close()
+
+    # run fimo on all seqs
+    all_sites = fimo(
+        motifs={k: Tensor(v) for k, v in motifs.items()},
+        sequences=tmp_seq_file_path,
+        alphabet=["A", "C", "G", "T"],
+        bin_size=bin_size,
+        eps=eps,
+        threshold=pthresh,
+        reverse_complement=rc,
+        dim=1,
+    )
+
+    sites = pd.DataFrame()
+    for all_idx, curr_sites in enumerate(all_sites):
+        curr_sites["seq_idx"] = curr_sites.sequence_name.apply(seq_ids.index)
+        curr_sites["matched_seq"] = curr_sites.apply(
+            lambda row: seqs[row.seq_idx][row.start : row.end], axis=1
+        )
+        curr_sites = curr_sites[
+            [
+                "motif_name",
+                "sequence_name",
+                "seq_idx",
+                "start",
+                "end",
+                "strand",
+                "score",
+                "p-value",
+                "matched_seq",
+            ]
+        ]
+        sites = pd.concat([sites, curr_sites])
+
+    # Concatenate results from all sequences
+    if len(sites) > 0:
+        sites = sites.reset_index(drop=True)
+        sites = sites.rename(columns={"motif_name": "motif","sequence_name": "sequence",
+                                      "score":"fimo_score", "p-value":"fimo_p-value"})
+
+        # Add attribution scores
+        if attrs is not None:
+            sites = score_sites(sites, attrs, seqs)
+            sites = score_motifs(sites, attrs, motifs)
+
+    return sites
+
+
+def score_sites(
+    sites: pd.DataFrame, attrs: np.ndarray, seqs: Union[str, List[str]]
+) -> pd.DataFrame:
+    """
+    Given a dataframe of motif matching sites identified by FIMO and a set of attributions, this
+    function assigns each site a 'site attribution score' corresponding to the average attribution value
+    for all nucleotides within the site. This score gives the importance of the sequence region but does
+    not reflect the similarity between the PWM and the shape of the attributions.
+
+    Args:
+        sites: A dataframe containing the output of scan_sequences
+        attrs: An optional numpy array of shape (B, 4, L) containing attributions
+                for the sequences.
+        seqs: A string or a list of DNA sequences as strings, which were the input to scan_sequences.
+
+    Returns:
+        pd.DataFrame containing columns 'motif', 'sequence', 'start', 'end',
+        'strand', 'score', 'pval', 'matched_seq', and 'site_attr_score'.
+    """
+    df = sites.copy()
+
+    # Format sequences
+    seqs = make_list(seqs)
+
+    # Format attributions
+    if attrs.ndim == 2:
+        attrs = np.expand_dims(attrs, 0)
+    assert attrs.shape[0] == len(seqs)
+
+    # Score sites for each sequence
+    df["site_attr_score"] = df.apply(
+        lambda row: attrs[row.seq_idx, :, row.start : row.end].mean(), axis=1
+    )
+
+    return df
+
+
+def score_motifs(
+    sites: pd.DataFrame, attrs: np.ndarray, motifs: Union[Dict[str, np.ndarray], str]
+) -> pd.DataFrame:
+    """
+    Given a dataframe of motif matching sites identified by FIMO and a set of attributions, this
+    function assigns each site a 'motif attribution score' which is the sum of the element-wise
+    product of the motif and the attributions. This score is higher when the shape of the motif
+    matches the shape of the attribution profile, and is particularly useful for ranking multiple
+    motifs that all match to the same sequence region.
+
+    Args:
+        sites: A dataframe containing the output of scan_sequences
+        attrs: An optional numpy array of shape (B, 4, L) containing attributions
+                for the sequences.
+        motifs: A dictionary whose values are Position Probability Matrices
+                (PPMs) of shape (4, L), or the path to a MEME file. This should be the
+                same as the input passed to scan_sequences.
+
+    Returns:
+        pd.DataFrame containing columns 'motif', 'sequence', 'start', 'end',
+        'strand', 'score', 'pval', 'matched_seq', and 'motif_attr_score'.
+    """
+    df = sites.copy()
+
+    # Format attributions
+    if attrs.ndim == 2:
+        attrs = np.expand_dims(attrs, 0)
+
+    # Format motifs
+    if isinstance(motifs, str):
+        motifs = read_meme_file(motifs)
+    motifs = {
+        motif_name: {"+": ppm, "-": np.flip(ppm, (0, 1))}
+        for motif_name, ppm in motifs.items()
+    }
+
+    # Calculate attr x PWM product for each site
+    df["motif_attr_score"] = df.apply(
+        lambda row: np.multiply(
+            attrs[row.seq_idx, :, row.start : row.end],
+            motifs[row.motif][row.strand],
+        )
+        .sum(0)
+        .mean(),
+        axis=1,
+    )
+
+    return df
+
+
+def compare_motifs(
+    ref_seq: str,
+    alt_seq: str,
+    motifs: Union[str, np.ndarray, Dict[str, np.ndarray]],
+    names: Optional[List[str]] = None,
+    pthresh: float = 1e-3,
+    rc: bool = True,
+    ref_attrs: Optional[np.ndarray] = None,
+    alt_attrs: Optional[np.ndarray] = None,
+) -> pd.DataFrame:
+    """
+    Scan sequences containing the reference and alternate alleles
+    to identify affected motifs.
+
+    Args:
+        ref_seq: The reference sequence as a string
+        alt_seq: The alternate sequence as a string
+        motifs: A dictionary whose values are Position Probability Matrices
+            (PPMs) of shape (4, L), or the path to a MEME file.
+        names: A list of motif names to read from the MEME file.
+            If None, all motifs in the file will be read.
+        pthresh: p-value cutoff for binding sites
+        rc: If True, both the sequence and its reverse complement will be
+            scanned. If False, only the given sequence will be scanned.
+        ref_attrs: A numpy array of shape (1, 4, L) containing attributions for
+            the reference sequence.
+        alt_attrs: A numpy array of shape (1, 4, L) containing attributions for
+            the alternate sequence.
+    """
+    # Construct attributions
+    if (ref_attrs is not None) and (alt_attrs is not None):
+        attrs = np.vstack([ref_attrs, alt_attrs])
+        score_cols = ["fimo_score", "fimo_p-value",'site_attr_score', 'motif_attr_score']
+    else:
+        if (ref_attrs is not None) or (alt_attrs is not None):
+            warnings.warn("Both ref_attrs and alt_attrs must be supplied to compare attribution scores.")
+        attrs = None
+        score_cols = ["fimo_score", "fimo_p-value"]
+
+    # Scan sequences
+    scan = scan_sequences(
+        seqs=[ref_seq, alt_seq],
+        motifs=motifs,
+        names=names,
+        seq_ids=["ref", "alt"],
+        pthresh=pthresh,
+        rc=rc,  # Scan both strands
+        attrs=attrs,
+    )
+    if len(scan) > 0:
+
+        # Compare the results for alt and ref sequences
+        scan = (
+            scan.pivot_table(
+                index=["motif", "start", "end", "strand"],
+                columns=["sequence"],
+                values=score_cols,
+            )
+            .reset_index()
+        )
+        scan.columns = [col[0] if col[1] == '' else '_'.join(col) for col in scan.columns]
+        for col in score_cols:
+            for c in [col+"_ref", col+"_alt"]:
+                if c not in scan.columns:
+                    scan[c] = np.nan
+
+        # Do not return results where the motif score is unchanged
+        scan = scan[scan.fimo_score_ref!=scan.fimo_score_alt]
+
+        # Fill in empty positions
+        for row in scan[scan.fimo_score_alt.isna()].itertuples():
+            sc = scan_sequences(
+                seqs=alt_seq[row.start:row.end+1],
+                motifs=motifs,
+                names=[row.motif],
+                pthresh=1,
+                rc=row.strand=='-',
+                attrs=None if attrs is None else alt_attrs[..., row.start:row.end+1]
+            ).iloc[0]
+            for col in score_cols:
+                scan.loc[row.Index, col+'_alt'] = sc[col]
+
+        for row in scan[scan.fimo_score_ref.isna()].itertuples():
+            sc = scan_sequences(
+                seqs=ref_seq[row.start:row.end+1],
+                motifs=motifs,
+                names=[row.motif],
+                pthresh=1,
+                rc=row.strand=='-',
+                attrs=None if attrs is None else ref_attrs[..., row.start:row.end+1]
+            ).iloc[0]
+            for col in score_cols:
+                scan.loc[row.Index, col+'_ref'] = sc[col]
+
+        # Compute fold change
+        scan["fimo_score_diff"] = scan.fimo_score_alt - scan.fimo_score_ref
+        scan = scan.sort_values("fimo_score_diff").reset_index(drop=True)
+        return scan
+
+
+def run_tomtom(motifs: Dict[str, np.ndarray], meme_file: str) -> pd.DataFrame:
+    """
+    Function to compare given motifs to reference motifs using the
+    tomtom algorithm, as implemented in memelite (https://github.com/jmschrei/memesuite-lite).
+
+    Args:
+        motifs: A dictionary whose values are Position Probability Matrices
+                (PPMs) of shape (4, L).
+        meme_file: Path to a meme file containing reference motifs.
+
+    Returns:
+        df: Pandas dataframe containing all tomtom results.
+    """
+    from statsmodels.stats.multitest import fdrcorrection
+    from memelite import tomtom
+
+    from varseq.interpret.motifs import motifs_to_strings
+    from varseq.resources import get_meme_file_path
+
+    meme_file = get_meme_file_path(meme_file)
+    ref_motifs = read_meme_file(meme_file)
+    query_consensuses = {k: motifs_to_strings(v) for k, v in motifs.items()}
+    target_consensuses = {k: motifs_to_strings(v) for k, v in ref_motifs.items()}
+    pvals, scores, offsets, overlaps, strands = tomtom(
+        list(motifs.values()), list(ref_motifs.values())
+    )
+
+    df = pd.DataFrame(
+        {
+            "Query_ID": np.repeat(list(motifs.keys()), len(ref_motifs)),
+            "Target_ID": list(ref_motifs.keys()) * len(motifs),
+            "Optimal_offset": offsets.flatten(),
+            "p-value": pvals.flatten(),
+        }
+    )
+    df["E-value"] = df["p-value"] * len(ref_motifs)
+    df["q-value"] = fdrcorrection(df["p-value"])[1]
+    df["Overlap"] = overlaps.flatten()
+    df["Query_consensus"] = df.Query_ID.map(query_consensuses)
+    df["Target_consensus"] = df.Target_ID.map(target_consensuses)
+    df["Orientation"] = ["+" if x == 0 else "-" for x in strands.flatten()]
+
+    return df

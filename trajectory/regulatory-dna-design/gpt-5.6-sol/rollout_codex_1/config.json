@@ -1,0 +1,17 @@
+{
+    "task": {
+        "path": "/home/ubuntu/canon/tasks/regulatory-dna-design"
+    },
+    "trial_name": "regulatory-dna-design__sDnmpEP",
+    "trials_dir": "/home/ubuntu/jobs/wave/sol-regulatory-dna-design/2026-08-19__12-05-02",
+    "agent": {
+        "name": "codex",
+        "model_name": "gpt-5.6-sol",
+        "extra_allowed_hosts": [
+            "api.openai.com",
+            "chatgpt.com",
+            "auth.openai.com"
+        ]
+    },
+    "job_id": "df3d38e0-2f9f-488e-9e37-c6eff95e5c4c"
+}

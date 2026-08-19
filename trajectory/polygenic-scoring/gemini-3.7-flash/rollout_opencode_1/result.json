@@ -1,0 +1,146 @@
+{
+    "id": "da1c98cf-af07-44fa-924f-2aaea7eb2cba",
+    "task_name": "polygenic-scoring",
+    "trial_name": "polygenic-scoring__r2iYQUd",
+    "trial_uri": "file:///home/ubuntu/jobs/wave/gemini-polygenic-scoring/run-1787156167/polygenic-scoring__r2iYQUd",
+    "task_id": {
+        "path": "/home/ubuntu/canon/tasks/polygenic-scoring"
+    },
+    "source": null,
+    "task_checksum": "b969301ec3396b5505997d0b7cac88acde9ae07edf184ac82e3d487a18738971",
+    "config": {
+        "task": {
+            "path": "/home/ubuntu/canon/tasks/polygenic-scoring",
+            "git_url": null,
+            "git_commit_id": null,
+            "name": null,
+            "ref": null,
+            "overwrite": false,
+            "download_dir": null,
+            "source": null
+        },
+        "trial_name": "polygenic-scoring__r2iYQUd",
+        "trials_dir": "/home/ubuntu/jobs/wave/gemini-polygenic-scoring/run-1787156167",
+        "install_only": false,
+        "timeout_multiplier": 1.0,
+        "agent_timeout_multiplier": 0.1,
+        "verifier_timeout_multiplier": null,
+        "agent_setup_timeout_multiplier": null,
+        "environment_build_timeout_multiplier": null,
+        "agent": {
+            "name": "opencode",
+            "import_path": null,
+            "model_name": "openrouter/google/gemini-3.7-flash",
+            "n_concurrent": null,
+            "concurrency_group": null,
+            "skills": [],
+            "override_timeout_sec": null,
+            "override_setup_timeout_sec": null,
+            "max_timeout_sec": null,
+            "extra_allowed_hosts": [
+                "openrouter.ai"
+            ],
+            "kwargs": {
+                "opencode_config": {
+                    "provider": {
+                        "openrouter": {
+                            "options": {
+                                "extraBody": {
+                                    "provider": {
+                                        "order": [
+                                            "google-vertex"
+                                        ],
+                                        "allow_fallbacks": false
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "mcp_servers": []
+        },
+        "environment": {
+            "type": "docker",
+            "import_path": null,
+            "force_build": false,
+            "delete": true,
+            "cpu_enforcement_policy": "auto",
+            "memory_enforcement_policy": "auto",
+            "override_cpus": null,
+            "override_memory_mb": null,
+            "override_storage_mb": null,
+            "override_gpus": null,
+            "override_tpu": null,
+            "mounts": null,
+            "extra_docker_compose": [],
+            "kwargs": {},
+            "extra_allowed_hosts": []
+        },
+        "verifier": {
+            "override_timeout_sec": null,
+            "max_timeout_sec": null,
+            "disable": false
+        },
+        "artifacts": [],
+        "extra_instruction_paths": [],
+        "job_id": "0880acc0-a2a8-4994-8e97-0aec8ce50b0c"
+    },
+    "agent_info": {
+        "name": "opencode",
+        "version": "1.18.18",
+        "model_info": {
+            "name": "google/gemini-3.7-flash",
+            "provider": "openrouter"
+        }
+    },
+    "agent_result": {
+        "n_input_tokens": 8316163,
+        "n_cache_tokens": 7094414,
+        "n_output_tokens": 81787,
+        "cost_usd": null,
+        "rollout_details": null,
+        "metadata": null
+    },
+    "verifier_result": {
+        "rewards": {
+            "reward": 0.9788533054401798,
+            "benchmark": 0.9788533054401799,
+            "category:ancestry_shift": 1.124107416799508,
+            "category:annotation_interaction": 1.1504438531678853,
+            "category:decoy_annotations": 1.160555353556002,
+            "category:dense_infinitesimal": 0.966440603855142,
+            "category:ld_shift": 1.2035910365891727,
+            "category:low_prevalence": 0.8529138111502279,
+            "category:nonlinear_annotation": 1.1610800331259792,
+            "category:rare_variant_maf": 1.1237968321106366,
+            "category:soft_membership": 1.1116809147638393,
+            "category:sparse_dense_mix": 0.8125397353105036,
+            "category:sparse_heavy_tail": 1.2672921720564145,
+            "category:suppressor_ld": 0.8181950640221274,
+            "category:svld_class": 1.1946369854995584,
+            "category:svld_strong": 1.0843081894870787,
+            "category:weak_ld": 1.1609219329008924
+        }
+    },
+    "exception_info": null,
+    "started_at": "2026-08-19T16:16:09.557196Z",
+    "finished_at": "2026-08-19T17:10:51.071929Z",
+    "environment_setup": {
+        "started_at": "2026-08-19T16:16:10.485795Z",
+        "finished_at": "2026-08-19T16:16:49.641034Z"
+    },
+    "agent_setup": {
+        "started_at": "2026-08-19T16:16:49.641092Z",
+        "finished_at": "2026-08-19T16:17:01.461641Z"
+    },
+    "agent_execution": {
+        "started_at": "2026-08-19T16:17:01.461728Z",
+        "finished_at": "2026-08-19T16:51:58.224687Z"
+    },
+    "verifier": {
+        "started_at": "2026-08-19T16:51:58.577185Z",
+        "finished_at": "2026-08-19T17:10:33.338178Z"
+    },
+    "step_results": null
+}

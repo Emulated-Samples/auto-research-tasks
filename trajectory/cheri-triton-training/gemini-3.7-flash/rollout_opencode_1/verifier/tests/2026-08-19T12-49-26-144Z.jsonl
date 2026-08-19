@@ -1,0 +1,14 @@
+{"timestamp":"2026-08-19T12:49:26.146Z","type":"test_start","category":"tests","message":"Running tests for problem: cheri-triton-training"}
+{"timestamp":"2026-08-19T12:49:26.148Z","type":"info","category":"tests","message":"============================================================"}
+{"timestamp":"2026-08-19T12:49:26.149Z","type":"info","category":"tests","message":"\nRunning: Install torch + triton (grader deps)"}
+{"timestamp":"2026-08-19T12:49:26.767Z","type":"info","category":"tests","message":"WARNING: You are using pip version 21.3.1; however, version 26.0.1 is available.\nYou should consider upgrading via the '/opt/cheri-grader-venv/bin/python -m pip install --upgrade pip' command.\n"}
+{"timestamp":"2026-08-19T12:49:26.767Z","type":"info","category":"tests","message":"PASS Install torch + triton (grader deps) (618ms)"}
+{"timestamp":"2026-08-19T12:49:26.767Z","type":"info","category":"tests","message":"\nRunning: Cheri training kernel: fwd+bwd correctness + speedup"}
+{"timestamp":"2026-08-19T12:49:26.768Z","type":"info","category":"tests","message":"[grader] /opt/cheri-grader-venv/bin/python /hyperfocal/env/environment/assets/grade_training.py --workspace /hyperfocal/env/workspace --seed 0"}
+{"timestamp":"2026-08-19T12:49:28.569Z","type":"info","category":"tests","message":"GRADE_JSON: {\"ok\": false, \"score\": 0.0, \"reason\": \"no @triton.jit kernel defined in cheri.py\", \"correctness\": null, \"perf\": null}\n"}
+{"timestamp":"2026-08-19T12:49:28.570Z","type":"error","category":"tests","message":"FAIL Cheri training kernel: fwd+bwd correctness + speedup (1802ms)"}
+{"timestamp":"2026-08-19T12:49:28.570Z","type":"test_result","category":"tests","message":"[OK] Install torch + triton (grader deps) (618ms)","data":{"testId":"deps","name":"Install torch + triton (grader deps)","status":"passed","duration":618,"score":1}}
+{"timestamp":"2026-08-19T12:49:28.570Z","type":"test_result","category":"tests","message":"[FAIL] Cheri training kernel: fwd+bwd correctness + speedup (1802ms)","data":{"testId":"training-kernel","name":"Cheri training kernel: fwd+bwd correctness + speedup","status":"failed","duration":1802,"score":0,"rationale":"no @triton.jit kernel defined in cheri.py"}}
+{"timestamp":"2026-08-19T12:49:28.573Z","type":"info","category":"tests","message":"Harbor rewards written: /tmp/tmp.YkUW7DaxNl/cheri-triton-training/harbor/reward.json"}
+{"timestamp":"2026-08-19T12:49:28.573Z","type":"info","category":"tests","message":"\n[OK] 1 passed, [FAIL] 1 failed"}
+{"timestamp":"2026-08-19T12:49:28.573Z","type":"session_end","category":"tests","message":"Session failed","data":{"duration":2428,"status":"failed","error":"1 test(s) failed or partially passed"}}

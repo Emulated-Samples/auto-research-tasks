@@ -1,0 +1,1510 @@
+{
+  "attainable_targets": {
+    "coherent_subspaces": {
+      "active_features": 3.985228,
+      "adjusted_average_precision": 0.829374,
+      "assignment_coherence": 0.8745,
+      "contribution_r2": 0.735368,
+      "counterfactual_r2": 0.613918,
+      "description_bits": 52.045737,
+      "fragmentation": 0.104618,
+      "geometry_score": 0.282435,
+      "mean_false_negative_rate": 0.169446,
+      "mean_false_positive_rate": 0.045572,
+      "merging": 0.029996,
+      "reconstruction_r2": 0.902124,
+      "support_youden": 0.797707
+    },
+    "core_balanced": {
+      "active_features": 4.922223,
+      "adjusted_average_precision": 0.961947,
+      "assignment_coherence": 0.892471,
+      "contribution_r2": 0.887044,
+      "counterfactual_r2": 0.830561,
+      "description_bits": 45.218722,
+      "fragmentation": 0.049754,
+      "geometry_score": 0.468614,
+      "mean_false_negative_rate": 0.049852,
+      "mean_false_positive_rate": 0.037933,
+      "merging": 0.087202,
+      "reconstruction_r2": 0.961844,
+      "support_youden": 0.921242
+    },
+    "correlated_supports": {
+      "active_features": 5.285228,
+      "adjusted_average_precision": 0.922533,
+      "assignment_coherence": 0.643695,
+      "contribution_r2": 0.866949,
+      "counterfactual_r2": 0.789192,
+      "description_bits": 54.383724,
+      "fragmentation": 0.248758,
+      "geometry_score": 0.452715,
+      "mean_false_negative_rate": 0.085828,
+      "mean_false_positive_rate": 0.0391,
+      "merging": 0.142016,
+      "reconstruction_r2": 0.956124,
+      "support_youden": 0.891758
+    },
+    "extended_topologies": {
+      "active_features": 6.406123,
+      "adjusted_average_precision": 0.915839,
+      "assignment_coherence": 0.861968,
+      "contribution_r2": 0.793573,
+      "counterfactual_r2": 0.739919,
+      "description_bits": 81.478128,
+      "fragmentation": 0.119648,
+      "geometry_score": 0.494424,
+      "mean_false_negative_rate": 0.071942,
+      "mean_false_positive_rate": 0.071406,
+      "merging": 0.035812,
+      "reconstruction_r2": 0.938724,
+      "support_youden": 0.898319
+    },
+    "long_tail": {
+      "active_features": 6.376087,
+      "adjusted_average_precision": 0.8825,
+      "assignment_coherence": 0.829473,
+      "contribution_r2": 0.746549,
+      "counterfactual_r2": 0.672373,
+      "description_bits": 64.275239,
+      "fragmentation": 0.149624,
+      "geometry_score": 0.395321,
+      "mean_false_negative_rate": 0.105875,
+      "mean_false_positive_rate": 0.083641,
+      "merging": 0.066071,
+      "reconstruction_r2": 0.930722,
+      "support_youden": 0.859288
+    },
+    "neural_hybrid": {
+      "active_features": 5.521952,
+      "adjusted_average_precision": 0.956719,
+      "assignment_coherence": 0.955291,
+      "contribution_r2": 0.867229,
+      "counterfactual_r2": 0.799845,
+      "description_bits": 64.205257,
+      "fragmentation": 0.022612,
+      "geometry_score": 0.478056,
+      "mean_false_negative_rate": 0.054738,
+      "mean_false_positive_rate": 0.030663,
+      "merging": 0.022097,
+      "reconstruction_r2": 0.942961,
+      "support_youden": 0.92404
+    },
+    "noisy_amplitudes": {
+      "active_features": 5.695653,
+      "adjusted_average_precision": 0.596226,
+      "assignment_coherence": 0.387737,
+      "contribution_r2": 0.477934,
+      "counterfactual_r2": 0.340978,
+      "description_bits": 76.668062,
+      "fragmentation": 0.572189,
+      "geometry_score": 0.154937,
+      "mean_false_negative_rate": 0.36299,
+      "mean_false_positive_rate": 0.065547,
+      "merging": 0.064156,
+      "reconstruction_r2": 0.810603,
+      "support_youden": 0.59067
+    },
+    "scaled_mixture": {
+      "active_features": 5.711765,
+      "adjusted_average_precision": 0.932969,
+      "assignment_coherence": 0.867565,
+      "contribution_r2": 0.87428,
+      "counterfactual_r2": 0.801453,
+      "description_bits": 81.566332,
+      "fragmentation": 0.115556,
+      "geometry_score": 0.466483,
+      "mean_false_negative_rate": 0.079832,
+      "mean_false_positive_rate": 0.024859,
+      "merging": 0.063135,
+      "reconstruction_r2": 0.935958,
+      "support_youden": 0.904
+    },
+    "support_shift": {
+      "active_features": 5.715218,
+      "adjusted_average_precision": 0.93506,
+      "assignment_coherence": 0.912318,
+      "contribution_r2": 0.868235,
+      "counterfactual_r2": 0.811165,
+      "description_bits": 61.83303,
+      "fragmentation": 0.046472,
+      "geometry_score": 0.414508,
+      "mean_false_negative_rate": 0.072167,
+      "mean_false_positive_rate": 0.046697,
+      "merging": 0.0674,
+      "reconstruction_r2": 0.944691,
+      "support_youden": 0.887353
+    }
+  },
+  "baselines": {
+    "coherent_subspaces": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.009524,
+          "assignment_coherence": 0.227402,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.067193,
+          "description_bits": 42.994895,
+          "fragmentation": 0.0,
+          "geometry_score": 0.006669,
+          "mean_false_negative_rate": 0.96092,
+          "mean_false_positive_rate": 0.956468,
+          "merging": 0.772598,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.015945
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.924588,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 5.0,
+          "adjusted_average_precision": 0.206018,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.000446,
+          "counterfactual_r2": 0.13086,
+          "description_bits": 55.25957,
+          "fragmentation": 0.621731,
+          "geometry_score": 0.040854,
+          "mean_false_negative_rate": 0.615457,
+          "mean_false_positive_rate": 0.144382,
+          "merging": 0.57489,
+          "reconstruction_r2": 0.834093,
+          "support_youden": 0.24016
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 2.821591,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.978205,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 35.174155,
+          "fragmentation": 0.011155,
+          "geometry_score": 0.999945,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.01064,
+          "reconstruction_r2": 0.990412,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 24.0,
+          "adjusted_average_precision": 0.280426,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.116361,
+          "description_bits": 48.525682,
+          "fragmentation": 0.705651,
+          "geometry_score": 0.059646,
+          "mean_false_negative_rate": 0.387498,
+          "mean_false_positive_rate": 0.302154,
+          "merging": 0.638501,
+          "reconstruction_r2": 0.985974,
+          "support_youden": 0.310348
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "core_balanced": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.01552,
+          "assignment_coherence": 0.114631,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.096534,
+          "description_bits": 42.420721,
+          "fragmentation": 0.0,
+          "geometry_score": 0.010118,
+          "mean_false_negative_rate": 0.95614,
+          "mean_false_positive_rate": 0.937917,
+          "merging": 0.885369,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.022609
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.805625,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 5.0,
+          "adjusted_average_precision": 0.2848,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.015448,
+          "counterfactual_r2": 0.189657,
+          "description_bits": 53.79195,
+          "fragmentation": 0.58174,
+          "geometry_score": 0.055883,
+          "mean_false_negative_rate": 0.590014,
+          "mean_false_positive_rate": 0.137508,
+          "merging": 0.493189,
+          "reconstruction_r2": 0.774885,
+          "support_youden": 0.272477
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 2.869444,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.97615,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 31.222411,
+          "fragmentation": 0.01239,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.01146,
+          "reconstruction_r2": 0.998769,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 21.997222,
+          "adjusted_average_precision": 0.391321,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.004601,
+          "counterfactual_r2": 0.19044,
+          "description_bits": 46.523444,
+          "fragmentation": 0.640057,
+          "geometry_score": 0.073912,
+          "mean_false_negative_rate": 0.384562,
+          "mean_false_positive_rate": 0.280273,
+          "merging": 0.620553,
+          "reconstruction_r2": 0.9925,
+          "support_youden": 0.335165
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "correlated_supports": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.008904,
+          "assignment_coherence": 0.114964,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.035436,
+          "description_bits": 54.955991,
+          "fragmentation": 0.0,
+          "geometry_score": 0.011493,
+          "mean_false_negative_rate": 0.969541,
+          "mean_false_positive_rate": 0.951004,
+          "merging": 0.885036,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.016955
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.740271,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 5.0,
+          "adjusted_average_precision": 0.162382,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 5e-05,
+          "counterfactual_r2": 0.150654,
+          "description_bits": 69.06903,
+          "fragmentation": 0.654591,
+          "geometry_score": 0.031642,
+          "mean_false_negative_rate": 0.660006,
+          "mean_false_positive_rate": 0.138586,
+          "merging": 0.713684,
+          "reconstruction_r2": 0.707791,
+          "support_youden": 0.201407
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 3.117045,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.825017,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 36.192613,
+          "fragmentation": 0.089056,
+          "geometry_score": 0.999897,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.085927,
+          "reconstruction_r2": 0.99393,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 28.998864,
+          "adjusted_average_precision": 0.275561,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.144402,
+          "description_bits": 61.135424,
+          "fragmentation": 0.74,
+          "geometry_score": 0.047184,
+          "mean_false_negative_rate": 0.419156,
+          "mean_false_positive_rate": 0.281122,
+          "merging": 0.826379,
+          "reconstruction_r2": 0.993809,
+          "support_youden": 0.299721
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "extended_topologies": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.004404,
+          "assignment_coherence": 0.206973,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.045697,
+          "description_bits": 84.940629,
+          "fragmentation": 0.0,
+          "geometry_score": 0.008173,
+          "mean_false_negative_rate": 0.967204,
+          "mean_false_positive_rate": 0.979293,
+          "merging": 0.793027,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.011836
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.663546,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 6.0,
+          "adjusted_average_precision": 0.133412,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.105362,
+          "description_bits": 101.618867,
+          "fragmentation": 0.630797,
+          "geometry_score": 0.031991,
+          "mean_false_negative_rate": 0.697635,
+          "mean_false_positive_rate": 0.119948,
+          "merging": 0.657807,
+          "reconstruction_r2": 0.622887,
+          "support_youden": 0.18316
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 3.729592,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.980702,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 57.101874,
+          "fragmentation": 0.0099,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.009399,
+          "reconstruction_r2": 0.989955,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 34.997959,
+          "adjusted_average_precision": 0.205506,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.120556,
+          "description_bits": 94.53131,
+          "fragmentation": 0.700831,
+          "geometry_score": 0.04488,
+          "mean_false_negative_rate": 0.429608,
+          "mean_false_positive_rate": 0.301838,
+          "merging": 0.728994,
+          "reconstruction_r2": 0.942699,
+          "support_youden": 0.268555
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "long_tail": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.004989,
+          "assignment_coherence": 0.076251,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.048592,
+          "description_bits": 61.218717,
+          "fragmentation": 0.0,
+          "geometry_score": 0.007907,
+          "mean_false_negative_rate": 0.976333,
+          "mean_false_positive_rate": 0.963506,
+          "merging": 0.923749,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.01016
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.778926,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 6.0,
+          "adjusted_average_precision": 0.191795,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.023826,
+          "counterfactual_r2": 0.119206,
+          "description_bits": 75.684484,
+          "fragmentation": 0.656575,
+          "geometry_score": 0.051232,
+          "mean_false_negative_rate": 0.623173,
+          "mean_false_positive_rate": 0.141212,
+          "merging": 0.603376,
+          "reconstruction_r2": 0.724963,
+          "support_youden": 0.235615
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 3.384783,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.978961,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 42.790135,
+          "fragmentation": 0.010782,
+          "geometry_score": 0.999918,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.010257,
+          "reconstruction_r2": 0.991225,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 31.994565,
+          "adjusted_average_precision": 0.302489,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.020113,
+          "counterfactual_r2": 0.136885,
+          "description_bits": 69.660179,
+          "fragmentation": 0.698375,
+          "geometry_score": 0.078819,
+          "mean_false_negative_rate": 0.386848,
+          "mean_false_positive_rate": 0.275859,
+          "merging": 0.693523,
+          "reconstruction_r2": 0.978997,
+          "support_youden": 0.337294
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "neural_hybrid": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.008299,
+          "assignment_coherence": 0.065303,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.070363,
+          "description_bits": 62.763548,
+          "fragmentation": 0.0,
+          "geometry_score": 0.007434,
+          "mean_false_negative_rate": 0.969097,
+          "mean_false_positive_rate": 0.954395,
+          "merging": 0.934697,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.014008
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.691894,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 5.0,
+          "adjusted_average_precision": 0.159771,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.093526,
+          "description_bits": 76.718202,
+          "fragmentation": 0.747823,
+          "geometry_score": 0.029485,
+          "mean_false_negative_rate": 0.698862,
+          "mean_false_positive_rate": 0.112691,
+          "merging": 0.678736,
+          "reconstruction_r2": 0.652429,
+          "support_youden": 0.188447
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 3.376829,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.977401,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 46.035705,
+          "fragmentation": 0.011359,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.01124,
+          "reconstruction_r2": 0.994228,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 26.99878,
+          "adjusted_average_precision": 0.25168,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.091699,
+          "description_bits": 69.146535,
+          "fragmentation": 0.772056,
+          "geometry_score": 0.046481,
+          "mean_false_negative_rate": 0.481401,
+          "mean_false_positive_rate": 0.256583,
+          "merging": 0.741354,
+          "reconstruction_r2": 0.954843,
+          "support_youden": 0.262016
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "noisy_amplitudes": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.006999,
+          "assignment_coherence": 0.083449,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.028796,
+          "description_bits": 77.635097,
+          "fragmentation": 0.0,
+          "geometry_score": 0.007355,
+          "mean_false_negative_rate": 0.959957,
+          "mean_false_positive_rate": 0.972295,
+          "merging": 0.916551,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.012193
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.809512,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 6.0,
+          "adjusted_average_precision": 0.109866,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.107963,
+          "description_bits": 92.384768,
+          "fragmentation": 0.751864,
+          "geometry_score": 0.040338,
+          "mean_false_negative_rate": 0.694441,
+          "mean_false_positive_rate": 0.151088,
+          "merging": 0.69429,
+          "reconstruction_r2": 0.656193,
+          "support_youden": 0.154471
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 3.309783,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.978905,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 72.826839,
+          "fragmentation": 0.010849,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.010246,
+          "reconstruction_r2": 0.873138,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 31.0,
+          "adjusted_average_precision": 0.156522,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.120824,
+          "description_bits": 85.234221,
+          "fragmentation": 0.7957,
+          "geometry_score": 0.040761,
+          "mean_false_negative_rate": 0.50737,
+          "mean_false_positive_rate": 0.297268,
+          "merging": 0.765343,
+          "reconstruction_r2": 0.929804,
+          "support_youden": 0.195362
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "scaled_mixture": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.005861,
+          "assignment_coherence": 0.030557,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.028203,
+          "description_bits": 89.378851,
+          "fragmentation": 0.0,
+          "geometry_score": 0.004648,
+          "mean_false_negative_rate": 0.974669,
+          "mean_false_positive_rate": 0.972946,
+          "merging": 0.969443,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.010718
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.678452,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 6.0,
+          "adjusted_average_precision": 0.125514,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.002505,
+          "counterfactual_r2": 0.116765,
+          "description_bits": 108.092767,
+          "fragmentation": 0.684558,
+          "geometry_score": 0.026988,
+          "mean_false_negative_rate": 0.71867,
+          "mean_false_positive_rate": 0.112676,
+          "merging": 0.610614,
+          "reconstruction_r2": 0.635003,
+          "support_youden": 0.168667
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 4.080392,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.977746,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 65.546274,
+          "fragmentation": 0.011198,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.011056,
+          "reconstruction_r2": 0.975096,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 38.994118,
+          "adjusted_average_precision": 0.228377,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.128621,
+          "description_bits": 100.892732,
+          "fragmentation": 0.69865,
+          "geometry_score": 0.045048,
+          "mean_false_negative_rate": 0.437907,
+          "mean_false_positive_rate": 0.291012,
+          "merging": 0.725395,
+          "reconstruction_r2": 0.964903,
+          "support_youden": 0.271081
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    },
+    "support_shift": {
+      "dense_collapse": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 1.0,
+          "adjusted_average_precision": 0.010914,
+          "assignment_coherence": 0.008404,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.041599,
+          "description_bits": 61.92461,
+          "fragmentation": 0.0,
+          "geometry_score": 0.005512,
+          "mean_false_negative_rate": 0.959179,
+          "mean_false_positive_rate": 0.971417,
+          "merging": 0.991596,
+          "reconstruction_r2": 1.0,
+          "support_youden": 0.013849
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "directional_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 0.703943,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 5.0,
+          "adjusted_average_precision": 0.124595,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.000143,
+          "counterfactual_r2": 0.116675,
+          "description_bits": 76.0112,
+          "fragmentation": 0.685568,
+          "geometry_score": 0.022977,
+          "mean_false_negative_rate": 0.695508,
+          "mean_false_positive_rate": 0.143631,
+          "merging": 0.666659,
+          "reconstruction_r2": 0.665008,
+          "support_youden": 0.160862
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      },
+      "oracle_gold": {
+        "categories": {
+          "compression": 1.0,
+          "efficiency": 1.0,
+          "factor_discovery": 1.0,
+          "factor_recovery": 1.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 1.0
+        },
+        "metrics": {
+          "active_features": 4.120652,
+          "adjusted_average_precision": 1.0,
+          "assignment_coherence": 0.972455,
+          "contribution_r2": 1.0,
+          "counterfactual_r2": 1.0,
+          "description_bits": 47.737683,
+          "fragmentation": 0.013409,
+          "geometry_score": 1.0,
+          "mean_false_negative_rate": 0.0,
+          "mean_false_positive_rate": 0.0,
+          "merging": 0.014136,
+          "reconstruction_r2": 0.986901,
+          "support_youden": 1.0
+        },
+        "reward": 1.0,
+        "seconds": 0.0
+      },
+      "overcomplete_pca": {
+        "categories": {
+          "compression": 0.0,
+          "efficiency": 0.0,
+          "factor_discovery": 0.0,
+          "factor_recovery": 0.0,
+          "reconstruction": 1.0,
+          "structural_coherence": 0.0
+        },
+        "metrics": {
+          "active_features": 27.998913,
+          "adjusted_average_precision": 0.21096,
+          "assignment_coherence": 0.0,
+          "contribution_r2": 0.0,
+          "counterfactual_r2": 0.132844,
+          "description_bits": 67.976315,
+          "fragmentation": 0.712093,
+          "geometry_score": 0.039247,
+          "mean_false_negative_rate": 0.446237,
+          "mean_false_positive_rate": 0.304141,
+          "merging": 0.745017,
+          "reconstruction_r2": 0.974463,
+          "support_youden": 0.249622
+        },
+        "reward": 0.0,
+        "seconds": 0.0
+      }
+    }
+  },
+  "benchmark_reward": {
+    "dense_collapse": {
+      "breadth_factor": 0.0,
+      "category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 0.0,
+        "structural_coherence": 0.0
+      },
+      "lower_tail_quality": 0.0,
+      "passed": false,
+      "raw_category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 1.0,
+        "structural_coherence": 0.0
+      },
+      "reward": 0.0,
+      "suite_qualities": {
+        "coherent_subspaces": 0.0,
+        "core_balanced": 0.0,
+        "correlated_supports": 0.0,
+        "extended_topologies": 0.0,
+        "long_tail": 0.0,
+        "neural_hybrid": 0.0,
+        "noisy_amplitudes": 0.0,
+        "scaled_mixture": 0.0,
+        "support_shift": 0.0
+      }
+    },
+    "directional_pca": {
+      "breadth_factor": 0.0,
+      "category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 0.0,
+        "structural_coherence": 0.0
+      },
+      "lower_tail_quality": 0.0,
+      "passed": false,
+      "raw_category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 0.753946,
+        "structural_coherence": 0.0
+      },
+      "reward": 0.0,
+      "suite_qualities": {
+        "coherent_subspaces": 0.0,
+        "core_balanced": 0.0,
+        "correlated_supports": 0.0,
+        "extended_topologies": 0.0,
+        "long_tail": 0.0,
+        "neural_hybrid": 0.0,
+        "noisy_amplitudes": 0.0,
+        "scaled_mixture": 0.0,
+        "support_shift": 0.0
+      }
+    },
+    "oracle_gold": {
+      "breadth_factor": 1.0,
+      "category_scores": {
+        "compression": 1.0,
+        "efficiency": 1.0,
+        "factor_discovery": 1.0,
+        "factor_recovery": 1.0,
+        "reconstruction": 1.0,
+        "structural_coherence": 1.0
+      },
+      "lower_tail_quality": 1.0,
+      "passed": true,
+      "raw_category_scores": {
+        "compression": 1.0,
+        "efficiency": 1.0,
+        "factor_discovery": 1.0,
+        "factor_recovery": 1.0,
+        "reconstruction": 1.0,
+        "structural_coherence": 1.0
+      },
+      "reward": 1.0,
+      "suite_qualities": {
+        "coherent_subspaces": 1.0,
+        "core_balanced": 1.0,
+        "correlated_supports": 1.0,
+        "extended_topologies": 1.0,
+        "long_tail": 1.0,
+        "neural_hybrid": 1.0,
+        "noisy_amplitudes": 1.0,
+        "scaled_mixture": 1.0,
+        "support_shift": 1.0
+      }
+    },
+    "overcomplete_pca": {
+      "breadth_factor": 0.0,
+      "category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 0.0,
+        "structural_coherence": 0.0
+      },
+      "lower_tail_quality": 0.0,
+      "passed": false,
+      "raw_category_scores": {
+        "compression": 0.0,
+        "efficiency": 0.0,
+        "factor_discovery": 0.0,
+        "factor_recovery": 0.0,
+        "reconstruction": 1.0,
+        "structural_coherence": 0.0
+      },
+      "reward": 0.0,
+      "suite_qualities": {
+        "coherent_subspaces": 0.0,
+        "core_balanced": 0.0,
+        "correlated_supports": 0.0,
+        "extended_topologies": 0.0,
+        "long_tail": 0.0,
+        "neural_hybrid": 0.0,
+        "noisy_amplitudes": 0.0,
+        "scaled_mixture": 0.0,
+        "support_shift": 0.0
+      }
+    }
+  },
+  "calibration_runs": {
+    "coherent_subspaces": [],
+    "core_balanced": [],
+    "correlated_supports": [],
+    "extended_topologies": [],
+    "long_tail": [],
+    "neural_hybrid": [],
+    "noisy_amplitudes": [],
+    "scaled_mixture": [],
+    "support_shift": []
+  },
+  "held_out_reference_reward": {},
+  "non_solution_floors": {
+    "coherent_subspaces": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.315669,
+      "assignment_coherence": 0.283549,
+      "contribution_r2": 0.003948,
+      "counterfactual_r2": 0.181856,
+      "description_bits": 40.687462,
+      "fragmentation": 0.0,
+      "geometry_score": 0.068331,
+      "mean_false_negative_rate": 0.363336,
+      "mean_false_positive_rate": 0.120212,
+      "merging": 0.504328,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.339818
+    },
+    "core_balanced": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.407531,
+      "assignment_coherence": 0.249321,
+      "contribution_r2": 0.034269,
+      "counterfactual_r2": 0.266434,
+      "description_bits": 39.988046,
+      "fragmentation": 0.0,
+      "geometry_score": 0.08033,
+      "mean_false_negative_rate": 0.351622,
+      "mean_false_positive_rate": 0.122665,
+      "merging": 0.461765,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.377331
+    },
+    "correlated_supports": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.356984,
+      "assignment_coherence": 0.165145,
+      "contribution_r2": 0.021128,
+      "counterfactual_r2": 0.215137,
+      "description_bits": 54.717055,
+      "fragmentation": 0.0,
+      "geometry_score": 0.068307,
+      "mean_false_negative_rate": 0.37254,
+      "mean_false_positive_rate": 0.104882,
+      "merging": 0.560792,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.374864
+    },
+    "extended_topologies": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.228438,
+      "assignment_coherence": 0.291336,
+      "contribution_r2": 0.012554,
+      "counterfactual_r2": 0.154067,
+      "description_bits": 84.212855,
+      "fragmentation": 0.0,
+      "geometry_score": 0.054577,
+      "mean_false_negative_rate": 0.401701,
+      "mean_false_positive_rate": 0.098309,
+      "merging": 0.60205,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.279547
+    },
+    "long_tail": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.3721,
+      "assignment_coherence": 0.474929,
+      "contribution_r2": 0.081292,
+      "counterfactual_r2": 0.296318,
+      "description_bits": 60.768156,
+      "fragmentation": 0.0,
+      "geometry_score": 0.090396,
+      "mean_false_negative_rate": 0.335914,
+      "mean_false_positive_rate": 0.096376,
+      "merging": 0.44425,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.402839
+    },
+    "neural_hybrid": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.298984,
+      "assignment_coherence": 0.25125,
+      "contribution_r2": 0.018838,
+      "counterfactual_r2": 0.189269,
+      "description_bits": 60.123716,
+      "fragmentation": 0.0,
+      "geometry_score": 0.059427,
+      "mean_false_negative_rate": 0.380512,
+      "mean_false_positive_rate": 0.109427,
+      "merging": 0.557993,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.318604
+    },
+    "noisy_amplitudes": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.216101,
+      "assignment_coherence": 0.389219,
+      "contribution_r2": 0.006852,
+      "counterfactual_r2": 0.217039,
+      "description_bits": 76.350492,
+      "fragmentation": 0.0,
+      "geometry_score": 0.057518,
+      "mean_false_negative_rate": 0.431324,
+      "mean_false_positive_rate": 0.118271,
+      "merging": 0.543824,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.258293
+    },
+    "scaled_mixture": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.237662,
+      "assignment_coherence": 0.256075,
+      "contribution_r2": 0.004964,
+      "counterfactual_r2": 0.164025,
+      "description_bits": 88.484531,
+      "fragmentation": 0.0,
+      "geometry_score": 0.051205,
+      "mean_false_negative_rate": 0.374334,
+      "mean_false_positive_rate": 0.102678,
+      "merging": 0.587656,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.288022
+    },
+    "support_shift": {
+      "active_features": 1.0,
+      "adjusted_average_precision": 0.284933,
+      "assignment_coherence": 0.289838,
+      "contribution_r2": 0.013363,
+      "counterfactual_r2": 0.190786,
+      "description_bits": 61.365939,
+      "fragmentation": 0.0,
+      "geometry_score": 0.05145,
+      "mean_false_negative_rate": 0.374267,
+      "mean_false_positive_rate": 0.113477,
+      "merging": 0.58296,
+      "reconstruction_r2": 1.0,
+      "support_youden": 0.305923
+    }
+  },
+  "normalization": "disjoint_non_solution_floor_to_prompt_only_reference_target",
+  "pass_boundary": {
+    "breadth_factor": 0.921954,
+    "catastrophic_floors": {
+      "compression": 0.15,
+      "factor_discovery": 0.15,
+      "factor_recovery": 0.15,
+      "structural_coherence": 0.15
+    },
+    "lower_tail_quality": 0.85,
+    "m6_tail_count": 3,
+    "m6_tail_implied_single_category_floor": 0.091506,
+    "required_raw_categories": {
+      "compression": 0.900261,
+      "factor_discovery": 0.954494,
+      "factor_recovery": 0.921954,
+      "reconstruction": 0.976187,
+      "structural_coherence": 0.943647
+    },
+    "required_raw_overall": 0.954494
+  },
+  "scored_metrics": {
+    "coherent_subspaces": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "core_balanced": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "correlated_supports": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "extended_topologies": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "long_tail": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "neural_hybrid": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "noisy_amplitudes": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden"
+    ],
+    "scaled_mixture": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ],
+    "support_shift": [
+      "contribution_r2",
+      "adjusted_average_precision",
+      "geometry_score",
+      "counterfactual_r2",
+      "support_youden",
+      "assignment_coherence"
+    ]
+  },
+  "scoring_version": "manifold-bench-v14",
+  "suite_count": 9
+}

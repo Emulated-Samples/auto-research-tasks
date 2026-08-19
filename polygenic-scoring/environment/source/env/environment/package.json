@@ -1,0 +1,14 @@
+{
+  "name": "@hyperfocal/env-svpgsbench",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": { "@hyperfocal/env-base": "file:../packages/env-base" },
+  "devDependencies": { "typescript": "5.9.3", "@types/node": "20.19.43" }
+}

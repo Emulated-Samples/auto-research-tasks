@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+*.js.map
+*.d.ts.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Hyperfocal (credentials and runtime state)
+.hyperfocal/
+
+# Telemetry (local test runs)
+telemetry/
+
+# Temporary files
+tmp/
+*.tmp
+*.log
+
+# Python / Lightning test detritus (grader runs the behavioral suite locally)
+__pycache__/
+*.pyc
+lightning_logs/
+.coverage
+
+# Grade venv built at setupProblem time (runtime artifact, never committed)
+.grade-venv/
+environment/.grade-venv/
+# Agent solve-time venv built at setupProblem time (runtime artifact, never committed)
+workspace/.venv/
+.venv/
+# worktree-local tsc symlink — never commit (breaks diff invariant)
+environment/node_modules

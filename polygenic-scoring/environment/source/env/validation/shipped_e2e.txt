@@ -1,0 +1,33 @@
+=== e2e separation (genuine vs cheats) ===
+
+===== grading genuine =====
+  overall reward = 0.9104
+    svld_class           0.8187
+    svld_rare_poly       0.8704
+    svld_strong          1.0421
+
+===== grading cheat:uniform_ridge =====
+  overall reward = 0.8478
+    svld_class           0.7563
+    svld_rare_poly       0.8220
+    svld_strong          0.9651
+
+===== grading cheat:marginal_pt =====
+  overall reward = 0.7704
+    svld_class           0.7666
+    svld_rare_poly       0.8129
+    svld_strong          0.7316
+
+===== VERDICT =====
+genuine overall = 0.9104  (floor 0.4)
+  PASS: genuine >= floor
+  PASS: genuine (0.910) > cheat:uniform_ridge (0.848)  margin=+0.063
+  PASS: genuine (0.910) > cheat:marginal_pt (0.770)  margin=+0.140
+
+  per-category genuine vs best cheat:
+    svld_class           genuine=0.819 bestcheat=0.767  [ok]
+    svld_rare_poly       genuine=0.870 bestcheat=0.822  [ok]
+    svld_strong          genuine=1.042 bestcheat=0.965  [ok]
+
+ALL CHECKS PASSED
+VALIDATE_EXIT=0

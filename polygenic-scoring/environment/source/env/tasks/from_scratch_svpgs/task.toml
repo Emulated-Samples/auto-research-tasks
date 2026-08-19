@@ -1,0 +1,46 @@
+schema_version = "1.3"
+
+# The submission IS the from-scratch program under /app/submission (fit/predict
+# + optional build.sh); pulled back per trial along with both log trees.
+artifacts = ["/app/submission", "/logs/agent", "/logs/verifier"]
+
+[task]
+name = "sauersml/svpgsbench-from-scratch-pgs"
+description = "Implement a polygenic-scoring (genotype -> phenotype) library from scratch using the fixed C/C++/Fortran or Python toolchain, with no PGS/GWAS/GAM/penalized-regression library, producing accurate, calibrated predictions efficiently across diverse cohorts."
+authors = [{ name = "SauersML" }]
+keywords = ["polygenic-score", "pgs", "from-scratch", "genetics", "prediction", "generalization"]
+
+[metadata]
+difficulty = "hard"
+category = "ml-modeling"
+task_id = "from_scratch_svpgs"
+ext_id = "svpgsbench-from-scratch-pgs-v1"
+display_title = "Implement a polygenic-scoring library from scratch"
+display_description = "Build a genotype-to-phenotype prediction library from scratch, exposing a fixed fit/predict CLI with accurate, calibrated, efficient behavior across diverse cohorts."
+language = "polyglot"
+languages = ["python", "c", "cpp", "fortran"]
+
+[agent]
+timeout_sec = 86400
+
+# The grader wrapper has a 14,400-second hard timeout: 3,600 seconds for build,
+# 45 datasets x 200 seconds, and 1,800 seconds of trusted overhead reserve. The
+# platform verifier adds a separate 1,800-second interruption/cleanup reserve.
+# An outer interruption invalidates the whole grade; partial scores are ignored.
+[verifier]
+timeout_sec = 16200
+
+# Networked agent sandbox so installed agent CLIs reach their model APIs. The
+# grader independently runs build/fit/predict in mandatory Bubblewrap with no
+# network or truth/grader mounts, and the image
+# ships only the documented generic numeric libraries (NumPy/SciPy/OpenBLAS/LAPACK),
+# NOT any PGS/GWAS/GAM/stock-penalized-regression tool, so "from scratch" is
+# enforced by the image rather than by a behavioral gate.
+[environment]
+network_mode = "public"
+build_timeout_sec = 3600
+cpus = 4
+memory_mb = 8192
+storage_mb = 10240
+gpus = 0
+mcp_servers = []

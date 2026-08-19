@@ -1,0 +1,31 @@
+{"timestamp":"2026-08-19T12:50:54.912Z","type":"test_start","category":"tests","message":"Running tests for problem: seq-design"}
+{"timestamp":"2026-08-19T12:50:54.913Z","type":"info","category":"tests","message":"============================================================"}
+{"timestamp":"2026-08-19T12:50:54.914Z","type":"info","category":"tests","message":"Running 5 grader batch(es) for 'seq-design'"}
+{"timestamp":"2026-08-19T12:50:54.914Z","type":"info","category":"tests","message":"\nRunning batch: seq-design held-out evaluation harness"}
+{"timestamp":"2026-08-19T12:51:32.182Z","type":"info","category":"tests","message":"📊 9 passed, (37s)"}
+{"timestamp":"2026-08-19T12:51:32.182Z","type":"info","category":"tests","message":"[pytest-suite] heldout_Dev=29.3464 -> score 1.0000"}
+{"timestamp":"2026-08-19T12:51:32.183Z","type":"info","category":"tests","message":"   9 passed, 0 failed (37269ms)"}
+{"timestamp":"2026-08-19T12:51:32.183Z","type":"info","category":"tests","message":"\nRunning: design() resolves to the agent workspace"}
+{"timestamp":"2026-08-19T12:51:32.290Z","type":"info","category":"tests","message":"PASS design() resolves to the agent workspace (107ms)"}
+{"timestamp":"2026-08-19T12:51:32.292Z","type":"info","category":"tests","message":"\nRunning: No site-packages varseq shadow"}
+{"timestamp":"2026-08-19T12:51:32.312Z","type":"info","category":"tests","message":"PASS No site-packages varseq shadow (19ms)"}
+{"timestamp":"2026-08-19T12:51:32.313Z","type":"info","category":"tests","message":"\nRunning: No answer-key artifact in the workspace"}
+{"timestamp":"2026-08-19T12:51:32.329Z","type":"info","category":"tests","message":"PASS No answer-key artifact in the workspace (16ms)"}
+{"timestamp":"2026-08-19T12:51:32.330Z","type":"info","category":"tests","message":"\nRunning: design() is deterministic given its arguments"}
+{"timestamp":"2026-08-19T12:51:45.035Z","type":"info","category":"tests","message":"PASS design() is deterministic given its arguments (12705ms)"}
+{"timestamp":"2026-08-19T12:51:45.036Z","type":"test_result","category":"tests","message":"[OK] pytest-test_heldout_Dev (36167ms)","data":{"testId":"pytest-test_heldout_Dev","name":"pytest-test_heldout_Dev","status":"passed","duration":36167,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.036Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad0] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad0]","name":"pytest-test_invalid_args_raise[bad0]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad1] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad1]","name":"pytest-test_invalid_args_raise[bad1]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad2] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad2]","name":"pytest-test_invalid_args_raise[bad2]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad3] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad3]","name":"pytest-test_invalid_args_raise[bad3]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad4] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad4]","name":"pytest-test_invalid_args_raise[bad4]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad5] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad5]","name":"pytest-test_invalid_args_raise[bad5]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad6] (0ms)","data":{"testId":"pytest-test_invalid_args_raise[bad6]","name":"pytest-test_invalid_args_raise[bad6]","status":"passed","duration":0,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] pytest-test_invalid_args_raise[bad7] (1ms)","data":{"testId":"pytest-test_invalid_args_raise[bad7]","name":"pytest-test_invalid_args_raise[bad7]","status":"passed","duration":1,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.037Z","type":"test_result","category":"tests","message":"[OK] design() resolves to the agent workspace (107ms)","data":{"testId":"cat-design-under-workspace","name":"design() resolves to the agent workspace","status":"passed","duration":107,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.038Z","type":"test_result","category":"tests","message":"[OK] No site-packages varseq shadow (19ms)","data":{"testId":"cat-no-pypi-reshadow","name":"No site-packages varseq shadow","status":"passed","duration":19,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.038Z","type":"test_result","category":"tests","message":"[OK] No answer-key artifact in the workspace (16ms)","data":{"testId":"cat-evaluator-not-in-workspace","name":"No answer-key artifact in the workspace","status":"passed","duration":16,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.038Z","type":"test_result","category":"tests","message":"[OK] design() is deterministic given its arguments (12705ms)","data":{"testId":"cat-determinism","name":"design() is deterministic given its arguments","status":"passed","duration":12705,"score":1}}
+{"timestamp":"2026-08-19T12:51:45.042Z","type":"info","category":"tests","message":"Harbor rewards written: /tmp/tmp.zuaD5rj7hf/seq-design/harbor/reward.json"}
+{"timestamp":"2026-08-19T12:51:45.042Z","type":"info","category":"tests","message":"\n[OK] 13 passed, [FAIL] 0 failed"}
+{"timestamp":"2026-08-19T12:51:45.042Z","type":"session_end","category":"tests","message":"Session completed","data":{"duration":50130,"status":"completed"}}

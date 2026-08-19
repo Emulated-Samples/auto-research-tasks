@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cherimoya"
+version = "0.2.0"
+description = "A light-weight deep learning architecture that uses modern optimization tricks to achieve strong predictive performance."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    {name = "The Cherimoya Authors"},
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy>=1.14.2",
+    "scipy>=1.0.0",
+    "pandas>=1.3.3",
+    "torch>=2.9.0",
+    "h5py>=3.7.0",
+    "tqdm>=4.64.1",
+    "seaborn>=0.11.2",
+    "modisco>=2.0.0",
+    "tangermeme>=0.2.3",
+    "macs3",
+    "bam2bw>=0.4.1",
+    "bpnet-lite>=1.0.0",
+    "triton>=3.5.1",
+    "joblib>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/cherimoya/cherimoya"
+Repository = "https://github.com/cherimoya/cherimoya"
+Documentation = "https://cherimoya.readthedocs.io"
+
+[project.optional-dependencies]
+docs = [
+    "sphinx>=7.0",
+    "furo>=2024.1",
+    "sphinx-copybutton>=0.5",
+]
+
+[project.scripts]
+cherimoya = "cherimoya_cli.__main__:main"
+
+[tool.setuptools]
+packages = ["cherimoya", "cherimoya_cli", "cherimoya_cli.commands"]
+
+[tool.setuptools.package-data]
+cherimoya_cli = ["skills/cherimoya/SKILL.md", "skills/cherimoya/references/*.md"]
+
+[tool.pytest.ini_options]
+markers = [
+    "cuda: requires a CUDA device (skipped when no GPU is available)",
+    "triton: requires Triton + a CUDA device (skipped otherwise)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

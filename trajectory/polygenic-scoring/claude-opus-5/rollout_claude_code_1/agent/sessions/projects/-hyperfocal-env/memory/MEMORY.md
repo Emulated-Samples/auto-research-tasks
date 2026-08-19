@@ -1,0 +1,1 @@
+- [OpenBLAS thread oversubscription](openblas-thread-oversubscription.md) — pin BLAS to 4 threads before importing numpy or lose 18x on matvecs

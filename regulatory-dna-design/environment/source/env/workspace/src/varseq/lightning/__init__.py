@@ -1,0 +1,1382 @@
+"""
+`varseq.lightning` contains LightningModel class, which inherits from
+`pytorch_lightning.LightningModule`. This class wraps sequence-to-function
+models and allows them to be used with downstream functions provided by
+pytorch lightning, including training, inference, validation, testing and
+fine-tuning.
+"""
+
+import warnings
+from collections import defaultdict
+from datetime import datetime
+from typing import Callable, List, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+import pytorch_lightning as pl
+import torch
+from einops import rearrange
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
+from torch import Tensor, nn, optim
+from torch.utils.data import DataLoader
+from torchmetrics import AUROC, Accuracy, AveragePrecision, MetricCollection
+
+import varseq.model.models
+from varseq.data.dataset import (
+    ISMDataset,
+    LabeledSeqDataset,
+    MotifScanDataset,
+    PatternMarginalizeDataset,
+    SeqDataset,
+    SpacingMarginalizeDataset,
+    TilingShuffleDataset,
+    VariantDataset,
+    VariantMarginalizeDataset,
+)
+from varseq.lightning.losses import PoissonMultinomialLoss
+from varseq.lightning.metrics import MSE, BestF1, PearsonCorrCoef
+from varseq.model.heads import ConvHead
+from varseq.sequence.format import strings_to_one_hot
+from varseq.utils import get_aggfunc, make_list
+
+default_train_params = {
+    "task": "binary",  # binary, multiclass, or regression
+    "lr": 1e-4,
+    "optimizer": "adam",
+    "batch_size": 512,
+    "num_workers": 1,
+    "devices": "cpu",
+    "logger": None,
+    "save_dir": ".",
+    "max_epochs": 1,
+    "checkpoint": True,
+    "loss": "bce",
+    "clip": 0,
+    "pos_weight": None,
+    "class_weights": None,
+    "total_weight": None,
+    "accumulate_grad_batches": 1,
+    "lr_scheduler": None,
+    "early_stopping": False,
+    "patience": 5,
+    "monitor": "val_loss",
+    "mode": "min",
+}
+
+
+class LightningModel(pl.LightningModule):
+    """
+    Wrapper for predictive sequence models
+
+    Args:
+        model_params: Dictionary of parameters specifying model architecture
+        train_params: Dictionary specifying training parameters
+    """
+
+    def __init__(
+        self,
+        model_params: dict,
+        train_params: dict = {},
+    ) -> None:
+        super().__init__()
+
+        self.save_hyperparameters(ignore=["model"])
+
+        # Add default training parameters
+        for key in default_train_params.keys():
+            if key not in train_params:
+                train_params[key] = default_train_params[key]
+            if key in ["loss", "task", "optimizer"]:
+                train_params[key] = train_params[key].lower()
+
+        # Save params
+        self.model_params = model_params
+        self.train_params = train_params
+        self.data_params = dict()
+        self.performance = dict()
+
+        # Build model
+        self.build_model()
+
+        # Set up loss function
+        self.initialize_loss()
+
+        # Set up activation function
+        self.initialize_activation()
+
+        # Inititalize metrics
+        self.initialize_metrics()
+
+        # Initialize prediction transform
+        self.reset_transform()
+
+    def build_model(self) -> None:
+        """
+        Build a model from parameter dictionary
+        """
+        model_type = self.model_params["model_type"]
+        if hasattr(varseq.model.models, model_type):
+            self.model = getattr(varseq.model.models, model_type)
+        else:
+            raise Exception("Unknown model type")
+
+        self.model = self.model(
+            **{k: v for k, v in self.model_params.items() if k not in ["model_type"]}
+        )
+
+    def initialize_loss(self) -> None:
+        """
+        Create the specified loss function.
+        """
+        # Losses always accept logits i.e. pre-activation values
+        # Regression loss: Poisson or MSE
+        if self.train_params["task"] == "regression":
+            if self.train_params["loss"] == "poisson":
+                self.loss = nn.PoissonNLLLoss(log_input=True, full=True)
+            elif self.train_params["loss"] == "poisson_multinomial":
+                self.loss = PoissonMultinomialLoss(
+                    total_weight=self.train_params["total_weight"], log_input=True
+                )
+            elif self.train_params["loss"] == "mse":
+                self.loss = nn.MSELoss()
+            else:
+                raise Exception("Regression losses: poisson, poisson_multinomial, MSE")
+
+        # Binary: Binary cross-entropy loss
+        elif self.train_params["task"] == "binary":
+            if self.train_params["loss"] == "bce":
+                pos_weight = self.train_params["pos_weight"]
+                if pos_weight is not None:
+                    pos_weight = Tensor(pos_weight).unsqueeze(1)
+                self.loss = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+            else:
+                raise Exception("Binary losses: bce")
+
+        # Multiclass: Cross-entropy loss
+        elif self.train_params["task"] == "multiclass":
+            weight = self.train_params["class_weights"]
+            if weight is not None:
+                weight = Tensor(weight)
+            self.loss = nn.CrossEntropyLoss(weight=weight)
+        else:
+            raise Exception("Task is not allowed")
+
+    def initialize_activation(self) -> None:
+        """
+        Add a task-specific activation function to the model.
+        """
+        # Regression
+        if self.train_params["task"] == "regression":
+            if self.train_params["loss"] in ["poisson", "poisson_multinomial"]:
+                self.activation = torch.exp
+            elif self.train_params["loss"] == "mse":
+                self.activation = nn.Identity()
+            else:
+                raise Exception("Regression losses: poisson, poisson_multinomial, MSE")
+
+        # Binary
+        elif self.train_params["task"] == "binary":
+            self.activation = torch.sigmoid
+
+        # Multiclass
+        elif self.train_params["task"] == "multiclass":
+            self.activation = nn.Softmax(dim=1)
+        else:
+            raise Exception("Defined tasks: regression, binary and multiclass")
+
+    def initialize_metrics(self):
+        """
+        Initialize the appropriate metrics for the given task.
+        """
+        # Regression:
+        if self.train_params["task"] == "regression":
+            metrics = MetricCollection(
+                {
+                    "mse": MSE(num_outputs=self.model.head.n_tasks, average=False),
+                    "pearson": PearsonCorrCoef(
+                        num_outputs=self.model.head.n_tasks, average=False
+                    ),
+                }
+            )
+
+        # Binary classification
+        elif self.train_params["task"] == "binary":
+            if self.model.head.n_tasks == 1:
+                metrics = MetricCollection(
+                    {
+                        "accuracy": Accuracy("binary", average=None),
+                        "avgprec": AveragePrecision("binary", average=None),
+                        "auroc": AUROC("binary", average=None),
+                        "best_f1": BestF1(
+                            num_labels=self.model.head.n_tasks, average=False
+                        ),
+                    }
+                )
+            else:
+                metrics = MetricCollection(
+                    {
+                        "accuracy": Accuracy(
+                            task="multilabel",
+                            num_labels=self.model.head.n_tasks,
+                            average=None,
+                        ),
+                        "avgprec": AveragePrecision(
+                            "multilabel",
+                            num_labels=self.model.head.n_tasks,
+                            average=None,
+                        ),
+                        "auroc": AUROC(
+                            "multilabel",
+                            num_labels=self.model.head.n_tasks,
+                            average=None,
+                        ),
+                        "best_f1": BestF1(
+                            num_labels=self.model.head.n_tasks, average=False
+                        ),
+                    }
+                )
+
+        # Multiclass
+        elif self.train_params["task"] == "multiclass":
+            metrics = MetricCollection(
+                {
+                    "accuracy": Accuracy(
+                        task="multiclass",
+                        num_classes=self.model.head.n_tasks,
+                        average=None,
+                    ),
+                    "avgprec": AveragePrecision(
+                        "multiclass", num_classes=self.model.head.n_tasks, average=None
+                    ),
+                    "auroc": AUROC(
+                        "multiclass", num_classes=self.model.head.n_tasks, average=None
+                    ),
+                }
+            )
+        else:
+            raise Exception("Defined tasks: regression, binary and multiclass")
+
+        self.val_metrics = metrics.clone(prefix="val_")
+        self.test_metrics = metrics.clone(prefix="test_")
+        self.val_losses = []
+        self.test_losses = []
+
+    def update_metrics(self, metrics: dict, y_hat: Tensor, y: Tensor) -> None:
+        """
+        Update metrics after each pass
+        """
+        if self.train_params["task"] == "binary":
+            metrics.update(y_hat, y.type(torch.long))
+        elif self.train_params["task"] == "multiclass":
+            metrics.update(y_hat, y.type(torch.long).argmax(axis=1))
+        else:
+            metrics.update(y_hat, y)
+
+    def format_input(self, x: Union[Tuple[Tensor, Tensor], Tensor]) -> Tensor:
+        """
+        Extract the one-hot encoded sequence from the input
+        """
+        # if x is a tuple of sequence, label, return the sequence
+        if isinstance(x, Tensor):
+            if x.ndim == 3:
+                return x
+            else:
+                return x.unsqueeze(0)
+        elif isinstance(x, Tuple):
+            return x[0]
+        else:
+            raise Exception("Cannot perform forward pass on the given input format.")
+
+    def forward(
+        self,
+        x: Union[Tuple[Tensor, Tensor], Tensor, str, List[str]],
+        logits: bool = False,
+    ) -> Tensor:
+        """
+        Forward pass
+        """
+        # Format the input as a one-hot encoded tensor
+        x = self.format_input(x)
+
+        # Run the model
+        x = self.model(x)
+
+        # forward() produces prediction (e.g. post-activation)
+        # unless logits=True, which is used in loss functions
+        if not logits:
+            x = self.activation(x)
+
+        # Apply transform
+        x = self.transform(x)
+        return x
+
+    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        x, y = batch
+        logits = self.forward(x, logits=True)
+        loss = self.loss(logits, y)
+        self.log(
+            "train_loss",
+            loss,
+            logger=self.train_params["logger"] is not None,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        return loss
+
+    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        x, y = batch
+        logits = self.forward(x, logits=True)
+        loss = self.loss(logits, y)
+        y_hat = self.activation(logits)
+        self.log(
+            "val_loss",
+            loss,
+            logger=self.train_params["logger"] is not None,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.update_metrics(self.val_metrics, y_hat, y)
+        self.val_losses.append(loss)
+        return loss
+
+    def on_validation_epoch_end(self):
+        """
+        Calculate metrics for entire validation set
+        """
+        # Compute metrics
+        val_metrics = self.val_metrics.compute()
+        mean_val_metrics = {k: v.mean() for k, v in val_metrics.items()}
+        # Compute loss
+        losses = torch.stack(self.val_losses)
+        mean_losses = torch.mean(losses)
+        # Log or print
+        if self.train_params["logger"] is None:
+            print(mean_val_metrics)
+            print(f"validation loss: {mean_losses}")
+        else:
+            self.log_dict(mean_val_metrics)
+            self.log("val_loss", mean_losses)
+
+        self.val_metrics.reset()
+        self.val_losses = []
+        self.performance["val"] = {
+            k: v.detach().cpu().numpy() for k, v in val_metrics.items()
+        }
+
+    def test_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        """
+        Calculate metrics after a single test step
+        """
+        x, y = batch
+        logits = self.forward(x, logits=True)
+        loss = self.loss(logits, y)
+        y_hat = self.activation(logits)
+        self.log("test_loss", loss, logger=True, on_step=False, on_epoch=True)
+        self.update_metrics(self.test_metrics, y_hat, y)
+        self.test_losses.append(loss)
+        return loss
+
+    def on_test_epoch_end(self) -> None:
+        """
+        Calculate metrics for entire test set
+        """
+        test_metrics = self.test_metrics.compute()
+        self.log_dict({k: v.mean() for k, v in test_metrics.items()})
+        losses = torch.stack(self.test_losses)
+        self.log("test_loss", torch.mean(losses))
+
+        self.test_metrics.reset()
+        self.test_losses = []
+        self.performance["test"] = {
+            k: v.detach().cpu().numpy() for k, v in test_metrics.items()
+        }
+
+    def configure_optimizers(self):
+        """
+        Configure optimizer and optional learning rate scheduler for training.
+
+        The optimizer is selected via ``train_params["optimizer"]`` (``"adam"`` or
+        ``"sgd"``).
+
+        An LR scheduler can be enabled by setting ``train_params["lr_scheduler"]``
+        to a dict with a ``"type"`` key and any scheduler-specific parameters::
+
+            "lr_scheduler": {
+                "type": "reduce_on_plateau",  # or "step", "cosine"
+                "patience": 3,
+                "factor": 0.5,
+                "monitor": "val_loss",
+            }
+
+        Supported scheduler types:
+
+        - ``"reduce_on_plateau"`` — :class:`torch.optim.lr_scheduler.ReduceLROnPlateau`.
+          Accepts ``factor``, ``patience``, and ``monitor``.
+        - ``"step"`` — :class:`torch.optim.lr_scheduler.StepLR`.
+          Accepts ``step_size`` and ``gamma``.
+        - ``"cosine"`` — :class:`torch.optim.lr_scheduler.CosineAnnealingLR`.
+          Accepts ``T_max`` (defaults to ``train_params["max_epochs"]``).
+
+        When ``train_params["lr_scheduler"]`` is ``None`` (the default), no
+        scheduler is used and the bare optimizer is returned.
+        """
+        # Build optimizer
+        if self.train_params["optimizer"] == "adam":
+            optimizer = optim.Adam(self.parameters(), lr=self.train_params["lr"])
+        elif self.train_params["optimizer"] == "sgd":
+            optimizer = optim.SGD(
+                self.parameters(), lr=self.train_params["lr"], momentum=0.9
+            )
+        else:
+            raise Exception("Unknown optimizer")
+
+        # Build LR scheduler if requested
+        scheduler_params = self.train_params.get("lr_scheduler")
+        if scheduler_params is None:
+            return optimizer
+
+        stype = scheduler_params["type"]
+        if stype == "reduce_on_plateau":
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=scheduler_params.get("factor", 0.1),
+                patience=scheduler_params.get("patience", 10),
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": scheduler_params.get("monitor", "val_loss"),
+                },
+            }
+        elif stype == "step":
+            scheduler = optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=scheduler_params["step_size"],
+                gamma=scheduler_params.get("gamma", 0.1),
+            )
+        elif stype == "cosine":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=scheduler_params.get(
+                    "T_max", self.train_params["max_epochs"]
+                ),
+            )
+        else:
+            raise Exception(
+                f"Unknown lr_scheduler type '{stype}'. "
+                "Supported: reduce_on_plateau, step, cosine"
+            )
+
+        return {"optimizer": optimizer, "lr_scheduler": {"scheduler": scheduler}}
+
+    def count_params(self) -> int:
+        """
+        Number of gradient enabled parameters in the model
+        """
+        return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+
+    def parse_devices(
+        self, devices: Union[str, int, List[int]]
+    ) -> Tuple[str, Union[str, List[int]]]:
+        """
+        Parses the devices argument and returns a tuple of accelerator and devices.
+
+        Args:
+            devices: Either "cpu" or an integer or list of integers representing the indices
+                of the GPUs for training.
+
+        Returns:
+            A tuple of accelerator and devices.
+        """
+        if devices == "cpu":
+            accelerator = "cpu"
+            devices = "auto"
+        else:
+            accelerator = "gpu"
+            devices = make_list(devices)
+        return accelerator, devices
+
+    def parse_logger(self) -> str:
+        """
+        Parses the name of the logger supplied in train_params.
+        """
+        if "name" not in self.train_params:
+            self.train_params["name"] = datetime.now().strftime("%Y_%d_%m_%H_%M")
+        if self.train_params["logger"] == "wandb":
+            logger = WandbLogger(
+                name=self.train_params["name"],
+                log_model=True,
+                save_dir=self.train_params["save_dir"],
+            )
+        elif self.train_params["logger"] == "csv":
+            logger = CSVLogger(
+                name=self.train_params["name"], save_dir=self.train_params["save_dir"]
+            )
+        elif self.train_params["logger"] is None:
+            logger = None
+        else:
+            raise NotImplementedError
+        return logger
+
+    def add_transform(self, prediction_transform: Callable) -> None:
+        """
+        Add a prediction transform
+        """
+        if prediction_transform is not None:
+            self.transform = prediction_transform
+
+    def reset_transform(self) -> None:
+        """
+        Remove a prediction transform
+        """
+        self.transform = nn.Identity()
+
+    def make_train_loader(
+        self,
+        dataset: Callable,
+        batch_size: Optional[int] = None,
+        num_workers: Optional[int] = None,
+    ) -> Callable:
+        """
+        Make dataloader for training
+        """
+        assert isinstance(dataset, LabeledSeqDataset)
+        return DataLoader(
+            dataset,
+            batch_size=batch_size or self.train_params["batch_size"],
+            shuffle=True,
+            num_workers=num_workers or self.train_params["num_workers"],
+        )
+
+    def make_test_loader(
+        self,
+        dataset: Callable,
+        batch_size: Optional[int] = None,
+        num_workers: Optional[int] = None,
+    ) -> Callable:
+        """
+        Make dataloader for validation and testing
+        """
+        assert isinstance(dataset, LabeledSeqDataset)
+        return DataLoader(
+            dataset,
+            batch_size=batch_size or self.train_params["batch_size"],
+            shuffle=False,
+            num_workers=num_workers or self.train_params["num_workers"],
+        )
+
+    def make_predict_loader(
+        self,
+        dataset: Callable,
+        batch_size: Optional[int] = None,
+        num_workers: Optional[int] = None,
+    ) -> Callable:
+        """
+        Make dataloader for prediction
+        """
+        if isinstance(dataset, LabeledSeqDataset):
+            dataset.predict = True
+        return DataLoader(
+            dataset,
+            batch_size=batch_size or self.train_params["batch_size"],
+            shuffle=False,
+            num_workers=num_workers or self.train_params["num_workers"],
+        )
+
+    def train_on_dataset(
+        self,
+        train_dataset: Callable,
+        val_dataset: Callable,
+        checkpoint_path: Optional[str] = None,
+    ):
+        """
+        Train model and optionally log metrics to wandb.
+
+        Args:
+            train_dataset (Dataset): Dataset object that yields training examples
+            val_dataset (Dataset) : Dataset object that yields training examples
+            checkpoint_path (str): Path to model checkpoint from which to resume training.
+                The optimizer will be set to its checkpointed state.
+
+        Returns:
+            PyTorch Lightning Trainer
+        """
+        torch.set_float32_matmul_precision("medium")
+
+        # Checkpointing
+        if self.train_params["checkpoint"] is True:
+            checkpoint_callbacks = [
+                ModelCheckpoint(monitor="val_loss", mode="min", save_last=True)
+            ]
+        elif isinstance(self.train_params["checkpoint"], dict):
+            checkpoint_callbacks = [ModelCheckpoint(**self.train_params["checkpoint"])]
+        else:
+            raise Exception("Checkpoint type must be a bool or dict")
+
+        # Early stopping
+        if self.train_params["early_stopping"]:
+            checkpoint_callbacks.append(
+                EarlyStopping(
+                    monitor=self.train_params["monitor"],
+                    patience=self.train_params["patience"],
+                    mode=self.train_params["mode"],
+                )
+            )
+
+        # Get device
+        accelerator, devices = self.parse_devices(self.train_params["devices"])
+
+        # Set up logging
+        logger = self.parse_logger()
+
+        # Set up trainer
+        trainer = pl.Trainer(
+            max_epochs=self.train_params["max_epochs"],
+            accelerator=accelerator,
+            devices=devices,
+            logger=logger,
+            callbacks=checkpoint_callbacks,
+            default_root_dir=self.train_params["save_dir"],
+            gradient_clip_val=self.train_params["clip"],
+            accumulate_grad_batches=self.train_params["accumulate_grad_batches"],
+        )
+
+        # Make dataloaders
+        train_dataloader = self.make_train_loader(train_dataset)
+        val_dataloader = self.make_test_loader(val_dataset)
+
+        if checkpoint_path is None:
+            # First validation pass
+            trainer.validate(model=self, dataloaders=val_dataloader)
+            self.val_metrics.reset()
+
+        # Add data parameters
+        self.data_params["tasks"] = train_dataset.tasks.reset_index(
+            names="name"
+        ).to_dict(orient="list")
+
+        self.data_params["train"] = {}
+        self.data_params["val"] = {}
+
+        for attr, value in self._get_dataset_attrs(train_dataset):
+            self.data_params["train"][attr] = value
+
+        for attr, value in self._get_dataset_attrs(val_dataset):
+            self.data_params["val"][attr] = value
+
+        # Add software params
+        import varseq
+
+        self.train_params["varseq_version"] = varseq.__version__
+
+        # Training
+        trainer.fit(
+            model=self,
+            train_dataloaders=train_dataloader,
+            val_dataloaders=val_dataloader,
+            ckpt_path=checkpoint_path,
+        )
+        return trainer
+
+    def _get_dataset_attrs(self, dataset: Callable) -> None:
+        """
+        Read data parameters from a dataset object
+        """
+        for attr in dir(dataset):
+            if not attr.startswith("_") and not attr.isupper():
+                value = getattr(dataset, attr)
+                if (
+                    (isinstance(value, str))
+                    or (isinstance(value, int))
+                    or (isinstance(value, float))
+                    or (value is None)
+                ):
+                    yield attr, value
+                elif attr == "intervals":
+                    yield attr, value.to_dict(orient="list")
+
+    def change_head(
+        self,
+        n_tasks: int,
+        final_pool_func: str,
+    ) -> None:
+        """
+        Build a new head with the desired number of tasks
+        """
+        in_channels = self.model.head.in_channels
+        self.model.head = ConvHead(
+            n_tasks=n_tasks,
+            in_channels=in_channels,
+            act_func=None,
+            pool_func=final_pool_func,
+            norm=False,
+        )
+        self.model_params["n_tasks"] = n_tasks
+        self.model_params["final_pool_func"] = final_pool_func
+
+        self.initialize_metrics()
+
+    def tune_on_dataset(
+        self,
+        train_dataset: Callable,
+        val_dataset: Callable,
+        final_act_func: Optional[str] = None,
+        final_pool_func: Optional[str] = None,
+        freeze_embedding: bool = False,
+    ):
+        """
+        Fine-tune a pretrained model on a new dataset.
+
+        Args:
+            train_dataset: Dataset object that yields training examples
+            val_dataset: Dataset object that yields training examples
+            final_act_func: Name of the final activation layer
+            final_pool_func: Name of the final pooling layer
+            freeze_embedding: If True, all the embedding layers of the pretrained
+                model will be frozen and only the head will be trained.
+
+        Returns:
+            PyTorch Lightning Trainer
+        """
+        # Move train data parameters
+        self.base_data_params = self.data_params.copy()
+        self.data_params = {}
+
+        # Make new model head
+        self.change_head(
+            n_tasks=train_dataset.n_tasks,
+            final_pool_func=final_pool_func,
+        )
+
+        # Freeze the model embedding layers if needed
+        if freeze_embedding:
+            for param in self.model.embedding.parameters():
+                param.requires_grad = False
+
+        # Train new model
+        return self.train_on_dataset(train_dataset, val_dataset)
+
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        checkpoint["data_params"] = self.data_params
+        checkpoint["performance"] = self.performance
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        self.data_params = checkpoint["data_params"]
+        self.performance = checkpoint["performance"]
+
+    def predict_on_seqs(
+        self,
+        x: Union[str, List[str]],
+        device: Union[str, int] = "cpu",
+    ) -> np.ndarray:
+        """
+        A simple function to return model predictions directly
+        on a batch of a single batch of sequences in string
+        format.
+
+        Args:
+            x: DNA sequences as a string or list of strings.
+            device: Index of the device to use
+
+        Returns:
+            A numpy array of predictions.
+        """
+        x = strings_to_one_hot(x, add_batch_axis=True)
+        x = x.to(device)
+        self.model = self.model.eval().to(device)
+        preds = self.forward(x).detach().cpu().numpy()
+        self.model = self.model.cpu()
+        return preds
+
+    def predict_on_dataset(
+        self,
+        dataset: Callable,
+        devices: Union[int, str, List[int]] = "cpu",
+        num_workers: int = 1,
+        batch_size: int = 256,
+        augment_aggfunc: Union[str, Callable] = "mean",
+        return_df: bool = False,
+        precision: Optional[str] = None,
+    ):
+        """
+        Predict for a dataset of sequences or variants
+
+        Args:
+            dataset: Dataset object that yields one-hot encoded sequences
+            devices: Device IDs to use
+            num_workers: Number of workers for data loader
+            batch_size: Batch size for data loader
+            augment_aggfunc: Return the average prediction across all augmented
+                versions of a sequence
+            return_df: Return the predictions as a Pandas dataframe
+            precision: Precision of the trainer e.g. '32' or 'bf16-mixed'.
+
+        Returns:
+            Model predictions as a numpy array or dataframe
+        """
+        torch.set_float32_matmul_precision("medium")
+        dataloader = self.make_predict_loader(
+            dataset,
+            num_workers=num_workers,
+            batch_size=batch_size,
+        )
+        accelerator, devices = self.parse_devices(devices)
+        trainer = pl.Trainer(
+            accelerator=accelerator,
+            devices=devices,
+            logger=None,
+            precision=precision,
+        )
+
+        # Predict
+        preds = torch.concat(trainer.predict(self, dataloader))
+
+        if isinstance(dataset, (SeqDataset, LabeledSeqDataset)):
+
+            # Reshape predictions
+            preds = (
+                rearrange(
+                    preds,
+                    "(b n) t l -> b n t l",
+                    n=dataset.n_augmented,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )  # B N T L
+
+            # Flip predictions for reverse complemented sequences
+            if (dataset.rc) and (preds.shape[-1] > 1):
+                preds[:, dataset.n_augmented // 2 :, :, :] = np.flip(
+                    preds[:, dataset.n_augmented // 2 :, ...], axis=-1
+                )
+
+            # Combine predictions for augmented sequences
+            if augment_aggfunc is not None:
+                preds = get_aggfunc(augment_aggfunc)(preds, axis=1)  # B T L
+
+            if return_df:
+                if (preds.ndim == 3) and (preds.shape[-1] == 1):
+                    n_tasks_pred = preds.shape[-2]
+                    task_names = (
+                        self.data_params.get("tasks", {}).get("name", None)
+                    )
+                    if task_names is None or n_tasks_pred != len(task_names):
+                        if task_names is not None:
+                            warnings.warn(
+                                f"Prediction has {n_tasks_pred} task(s) but the model"
+                                f" has {len(task_names)} task name(s), likely due to a"
+                                " prediction transform. Using generic column names."
+                            )
+                        task_names = [
+                            f"task_{i}" for i in range(n_tasks_pred)
+                        ]
+                    preds = pd.DataFrame(
+                        preds.squeeze(-1), columns=task_names
+                    )
+                else:
+                    warnings.warn(
+                        "Cannot produce dataframe output."
+                        + "Either output length > 1 or augmented sequences are not aggregated."
+                    )
+
+        elif isinstance(dataset, VariantDataset):
+            # Reshape predictions
+            preds = (
+                rearrange(
+                    preds,
+                    "(b n a) t l -> b n a t l",
+                    n=dataset.n_augmented,
+                    a=dataset.n_alleles,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )  # B N 2 T L
+
+            # Flip predictions for reverse complemented sequences
+            if (dataset.rc) and (preds.shape[-1] > 1):
+                preds[:, dataset.n_augmented // 2 :, ...] = np.flip(
+                    preds[:, dataset.n_augmented // 2 :, ...], axis=-1
+                )
+
+            # Combine predictions for augmented sequences
+            if augment_aggfunc is not None:
+                preds = get_aggfunc(augment_aggfunc)(preds, axis=1)  # B 2 T L
+
+        elif isinstance(
+            dataset,
+            (
+                VariantMarginalizeDataset,
+                PatternMarginalizeDataset,
+                SpacingMarginalizeDataset,
+            ),
+        ):
+            # Reshape predictions
+            preds = (
+                rearrange(
+                    preds,
+                    "(b s n a) t l -> b s n a t l",
+                    s=dataset.n_shuffles,
+                    n=dataset.n_augmented,
+                    a=dataset.n_alleles,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )  # B S N 2 T L
+
+            # Flip predictions for reverse complemented sequences
+            if (dataset.rc) and (preds.shape[-1] > 1):
+                preds[:, :, dataset.n_augmented // 2, ...] = np.flip(
+                    preds[:, :, dataset.n_augmented // 2, ...], axis=-1
+                )
+
+            # Combine predictions for augmented sequences
+            if augment_aggfunc is not None:
+                preds = get_aggfunc(augment_aggfunc)(preds, axis=2)  # B S 2 T L
+
+        elif isinstance(dataset, (ISMDataset, MotifScanDataset)):
+            preds = (
+                rearrange(
+                    preds,
+                    "(b p a) t l -> b p a t l",
+                    p=dataset.n_positions,
+                    a=dataset.n_alleles,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )  # B P A T L
+
+        elif isinstance(dataset, TilingShuffleDataset):
+            preds = (
+                rearrange(
+                    preds,
+                    "(b p s) t l -> b p s t l",
+                    p=dataset.n_positions,
+                    s=dataset.n_shuffles,
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )
+
+        return preds
+
+    def test_on_dataset(
+        self,
+        dataset: Callable,
+        devices: Union[str, int, List[int]] = "cpu",
+        num_workers: int = 1,
+        batch_size: int = 256,
+        precision: Optional[str] = None,
+        write_path: Optional[str] = None,
+    ):
+        """
+        Run test loop for a dataset
+
+        Args:
+            dataset: Dataset object that yields one-hot encoded sequences
+            devices: Device IDs to use for inference
+            num_workers: Number of workers for data loader
+            batch_size: Batch size for data loader
+            precision: Precision of the trainer e.g. '32' or 'bf16-mixed'.
+            write_path: Path to write a new model checkpoint containing
+                test data parameters and performance.
+
+        Returns:
+            Dataframe containing all calculated metrics on the test set.
+        """
+        torch.set_float32_matmul_precision("medium")
+        dataloader = self.make_test_loader(
+            dataset,
+            num_workers=num_workers,
+            batch_size=batch_size,
+        )
+        accelerator, devices = self.parse_devices(devices)
+        trainer = pl.Trainer(
+            accelerator=accelerator,
+            devices=devices,
+            logger=None,
+            precision=precision,
+        )
+        self.test_metrics.reset()
+        trainer.test(model=self, dataloaders=dataloader, verbose=True)
+        self.test_metrics.reset()
+
+        self.data_params["test"] = {}
+        for attr, value in self._get_dataset_attrs(dataset):
+            self.data_params["test"][attr] = value
+
+        if write_path is not None:
+            trainer.save_checkpoint(write_path)
+        return pd.DataFrame(
+            self.performance["test"], index=self.data_params["tasks"]["name"]
+        )
+
+    def embed_on_dataset(
+        self,
+        dataset: Callable,
+        device: Union[str, int] = "cpu",
+        num_workers: int = 1,
+        batch_size: int = 256,
+    ):
+        """
+        Return embeddings for a dataset of sequences
+
+        Args:
+            dataset: Dataset object that yields one-hot encoded sequences
+            device: Device ID to use
+            num_workers: Number of workers for data loader
+            batch_size: Batch size for data loader
+
+        Returns:
+            Numpy array of shape (B, T, L) containing embeddings.
+        """
+        torch.set_float32_matmul_precision("medium")
+
+        # Make dataloader
+        dataloader = self.make_predict_loader(
+            dataset, num_workers=num_workers, batch_size=batch_size
+        )
+
+        # Get device
+        if isinstance(device, list):
+            device = device[0]
+            warnings.warn(
+                f"embed_on_dataset currently only uses a single GPU: Using {device}"
+            )
+        if isinstance(device, str):
+            try:
+                device = int(device)
+            except Exception:
+                pass
+        device = torch.device(device)
+
+        # Move model to device
+        orig_device = self.device
+        self.to(device)
+
+        # Get embeddings
+        preds = []
+        self.model = self.model.eval()
+        for batch in iter(dataloader):
+            batch = batch.to(device)
+            preds.append(self.model.embedding(batch).detach().cpu())
+
+        # Return to original device
+        self.to(orig_device)
+        return torch.vstack(preds).numpy()
+
+    def get_task_idxs(
+        self,
+        tasks: Union[int, str, List[int], List[str]],
+        key: str = "name",
+        invert: bool = False,
+    ) -> Union[int, List[int]]:
+        """
+        Given a task name or metadata entry, get the task index
+        If integers are provided, return them unchanged
+
+        Args:
+            tasks: A string corresponding to a task name or metadata entry,
+                or an integer indicating the index of a task, or a list of strings/integers
+            key: key to model.data_params["tasks"] in which the relevant task data is
+                stored. "name" will be used by default.
+            invert: Get indices for all tasks except those listed in tasks
+
+        Returns:
+            The index or indices of the corresponding task(s) in the model's
+            output.
+        """
+        # If a string is provided, extract the index
+        if isinstance(tasks, str):
+            return self.data_params["tasks"][key].index(tasks)
+        # If an integer is provided, return it as the index
+        elif isinstance(tasks, int):
+            return tasks
+        # If a list is provided, return teh index for each element
+        elif isinstance(tasks, list):
+            return [self.get_task_idxs(task) for task in tasks]
+        else:
+            raise TypeError("Input must be a list, string or integer")
+        if invert:
+            return [
+                i
+                for i in range(self.model_params["n_tasks"])
+                if i not in make_list(tasks)
+            ]
+
+    def input_coord_to_output_bin(
+        self,
+        input_coord: int,
+        start_pos: int = 0,
+    ) -> int:
+        """
+        Given the position of a base in the input, get the index of the corresponding bin
+        in the model's prediction.
+
+        Args:
+            input_coord: Genomic coordinate of the input position
+            start_pos: Genomic coordinate of the first base in the input sequence
+
+        Returns:
+            Index of the output bin containing the given position.
+
+        """
+        output_bin = (
+            (input_coord - start_pos) / self.data_params["train"]["bin_size"]
+        ) - self.model_params["crop_len"]
+        return int(np.floor(output_bin))
+
+    def output_bin_to_input_coord(
+        self,
+        output_bin: int,
+        return_pos: str = "start",
+        start_pos: int = 0,
+    ) -> int:
+        """
+        Given the index of a bin in the output, get its corresponding
+        start or end coordinate.
+
+        Args:
+            output_bin: Index of the bin in the model's output
+            return_pos: "start" or "end"
+            start_pos: Genomic coordinate of the first base in the input sequence
+
+        Returns:
+            Genomic coordinate corresponding to the start (if return_pos = start)
+            or end (if return_pos=end) of the bin.
+
+        """
+        start = (output_bin + self.model_params["crop_len"]) * self.data_params[
+            "train"
+        ]["bin_size"]
+        if return_pos == "start":
+            return start + start_pos
+        elif return_pos == "end":
+            return start + self.data_params["train"]["bin_size"] + start_pos
+        else:
+            raise NotImplementedError
+
+    def input_intervals_to_output_intervals(
+        self,
+        intervals: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """
+        Given a dataframe containing intervals corresponding to the
+        input sequences, return a dataframe containing intervals corresponding
+        to the model output.
+
+        Args:
+            intervals: A dataframe of genomic intervals
+
+        Returns:
+            A dataframe containing the genomic intervals corresponding
+            to the model output from each input interval.
+        """
+        output_intervals = intervals.copy()
+        crop_coords = (
+            self.model_params["crop_len"] * self.data_params["train"]["bin_size"]
+        )
+        output_intervals["start"] = intervals.start + crop_coords
+        output_intervals["end"] = intervals.end - crop_coords
+        return output_intervals
+
+    def input_intervals_to_output_bins(
+        self, intervals: pd.DataFrame, start_pos: int = 0
+    ) -> None:
+        """
+        Given a dataframe of genomic intervals, add columns indicating
+        the indices of output bins that overlap the start and end of each interval.
+
+        Args:
+            intervals: A dataframe of genomic intervals
+            start_pos: The start position of the sequence input to the model.
+
+        Returns:start and end indices of the output bins corresponding
+            to each input interval.
+        """
+        result = pd.DataFrame(
+            {
+                "start": intervals.start.apply(
+                    self.input_coord_to_output_bin, args=(start_pos,)
+                ),
+                "end": intervals.end.apply(
+                    self.input_coord_to_output_bin, args=(start_pos,)
+                )
+                + 1,
+            }
+        )
+
+        # Check for intervals in the cropped-out region
+        issues = []
+        n_negative = (result["start"] < 0).sum()
+        if n_negative > 0:
+            issues.append(
+                f"{n_negative} interval(s) have start positions in the cropped-out "
+                "region, resulting in negative output bin indices."
+            )
+        seq_len = self.data_params.get("train", {}).get("seq_len")
+        if seq_len is not None:
+            bin_size = self.data_params["train"]["bin_size"]
+            crop_len = self.model_params["crop_len"]
+            max_bins = seq_len // bin_size - 2 * crop_len
+            n_over = (result["end"] > max_bins).sum()
+            if n_over > 0:
+                issues.append(
+                    f"{n_over} interval(s) have end positions beyond the cropped-out "
+                    f"region, resulting in output bin indices exceeding the maximum "
+                    f"({max_bins})."
+                )
+        if issues:
+            warnings.warn(
+                " ".join(issues)
+                + " Consider removing these intervals or manually setting their"
+                " boundaries to 0 or the maximum number of output bins."
+            )
+
+        return result
+
+
+class LightningModelEnsemble(pl.LightningModule):
+    """
+    Combine multiple LightningModel objects into a single object.
+    When predict_on_dataset is used, it will return the concatenated
+    predictions from all the models in the order in which they were supplied.
+
+    Args:
+        models (list): A list of multiple LightningModel objects
+        model_names (list): A name for each model. This will be prefixed
+            to the names of the individual tasks predicted by the model.
+            If not supplied, the models will be named "model0", "model1", etc.
+    """
+
+    def __init__(self, models: list, model_names: Optional[List[str]] = None) -> None:
+        super().__init__()
+
+        # Save models
+        self.models = [model for model in models]
+
+        # Save model names
+        self.model_names = model_names or [f"model{i}" for i in range(len(self.models))]
+
+        # Save their task metadata
+        self.model_params = {
+            "n_tasks": sum([model.model_params["n_tasks"] for model in self.models])
+        }
+        self.data_params = {"tasks": defaultdict(list)}
+
+        # Set models to eval mode (since this class is used for prediction and design)
+        for model in self.models:
+            model.eval()
+
+        self.reset_transform()
+        self._combine_tasks()
+
+    def _combine_tasks(self) -> None:
+        """
+        Combine the task metadata of all the sub-models into self.data_params["tasks"]
+        """
+        # List all available keys
+        task_keys = set(self.models[0].data_params["tasks"].keys())
+        for model in self.models[1:]:
+            task_keys = task_keys.intersection(model.data_params["tasks"].keys())
+
+        # Collect task metadata for each key
+        for key in task_keys:
+            for name, model in zip(self.model_names, self.models):
+                self.data_params["tasks"][key].extend(
+                    ["_".join([name, x]) for x in model.data_params["tasks"][key]]
+                )
+            assert (
+                len(set(self.data_params["tasks"][key])) == self.model_params["n_tasks"]
+            )
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Forward Pass.
+        """
+        x = torch.cat([model(x) for model in self.models], axis=1)  # B, T, L
+
+        # apply transform to ensemble output
+        x = self.transform(x)
+        return x
+
+    def add_transform(self, prediction_transform: Callable) -> None:
+        """
+        Add a prediction transform
+        """
+        if prediction_transform is not None:
+            self.transform = prediction_transform
+
+    def reset_transform(self) -> None:
+        """
+        Remove a prediction transform
+        """
+        self.transform = nn.Identity()
+
+    def predict_on_dataset(
+        self,
+        dataset: Callable,
+        **kwargs,
+    ):
+        """
+        Predict for a dataset of sequences or variants. This will return
+        the concatenated predictions from all the constituent models, in the
+        order in which they were supplied to __.init__. Predictions will be
+        concatenated along the task axis.
+
+        Args:
+            dataset: Dataset object that yields one-hot encoded sequences
+            **kwargs: Additional arguments to pass to the `predict_on_dataset`
+                functions of the constituent models.
+
+        Returns:
+            Model predictions as a numpy array
+        """
+        preds = np.concatenate(
+            [model.predict_on_dataset(dataset, **kwargs) for model in self.models],
+            axis=-2,
+        )
+        if not isinstance(self.transform, nn.Identity):
+            preds = self.transform(torch.tensor(preds)).numpy()
+        return preds
+
+    def get_task_idxs(
+        self, tasks: Union[str, int, List[str], List[int]], key: str = "name"
+    ) -> Union[int, List[int]]:
+        """
+        Return the task index given the name of the task. Note that task
+        names should be supplied with a prefix indicating the model number,
+        so for instance if you want the predictions from the second model
+        on astrocytes, the task name would be "{name of second model}_astrocytes".
+        If model names were not supplied to __init__, the task name would
+        be "model1_astrocytes".
+
+        Args:
+            tasks: A string corresponding to a task name or metadata entry,
+                or an integer indicating the index of a task, or a list of strings/integers
+            key: key to model.data_params["tasks"] in which the relevant task data is
+                stored. "name" will be used by default.
+
+        Returns: An integer or list of integers representing the indices of the
+            tasks in the model output.
+        """
+        # If a string is provided, extract the index
+        if isinstance(tasks, str):
+            return self.data_params["tasks"][key].index(tasks)
+
+        # If an integer is provided, return it as the index
+        elif isinstance(tasks, int):
+            return tasks
+
+        # If a list is provided, return the index for each element
+        elif isinstance(tasks, list):
+            return [self.get_task_idxs(task) for task in tasks]
+        else:
+            raise TypeError("Input must be a list, string or integer")

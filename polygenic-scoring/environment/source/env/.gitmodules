@@ -1,0 +1,6 @@
+[submodule "packages/env-base"]
+	path = packages/env-base
+	url = https://github.com/Hyperfocal-AI-Packages/env-base.git
+[submodule "packages/env-orchestrator"]
+	path = packages/env-orchestrator
+	url = https://github.com/Hyperfocal-AI-Packages/env-orchestrator.git

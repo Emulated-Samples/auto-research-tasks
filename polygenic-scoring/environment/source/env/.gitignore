@@ -1,0 +1,52 @@
+__pycache__/
+*.pyc
+/tmp/
+*.log
+validation/logs/
+environment/dist/*
+!environment/dist/*.js
+!environment/dist/*.d.ts
+node_modules/
+*.jsonl
+# ...EXCEPT the archived measurement data. Every addendum in rollout_analysis/
+# cites a .jsonl as its reproducible evidence ("Raw rows: arm_sweep_2026-07-15
+# .jsonl", "raw data archived in this directory"), and the blanket rule above
+# meant NONE of it was ever tracked -- a fresh clone got the conclusions and none
+# of the numbers behind them. These files are 2-60 KB. There is no size argument.
+!rollout_analysis/*.jsonl
+tools/.codex_review.done
+tools/codex_review_cron.log
+.venv/
+
+# LIVE CREDENTIALS, never committed. This is not hypothetical and not about the
+# developer's laptop: on a provisioned box the control plane writes
+# `environment/.env` INSIDE this repository's checkout -- AWS_ACCESS_KEY_ID,
+# AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN, refreshed via SSM. It is 0600
+# root-owned and untracked, so it is invisible until someone runs `git add -A` in a
+# deployed checkout, at which point live cloud credentials land in a PUBLIC repo.
+# `hfdev env-publish` scans every published tree for live dotenv files precisely
+# because this accident is known to happen. One line of deny costs nothing.
+.env
+*.env
+
+# The corpus HMAC key, for the same reason and a worse consequence. This repo is
+# grader-side: the key authenticates every anchor and manifest, so a copy of it in
+# a PUBLIC tree does not merely leak a secret, it lets anyone forge the reward
+# scale the benchmark is defined by. The key's homes are OUTSIDE the checkout
+# (~/.svpgsbench/corpus_shipping.key and the root-only runtime path
+# /run/secrets/svpgsbench-corpus.key) and nothing should ever write it in here --
+# these lines exist so that a stray copy, a debug dump, or a --key-file written to
+# the wrong cwd cannot be committed by a `git add -A`.
+#
+# grader/corpus-key.hex is the SEALED source credential and is deliberately
+# TRACKED (setup decodes it into the owner-only runtime key), so it is negated
+# below rather than caught by the *.key wildcard.
+*.key
+corpus_shipping.key
+!grader/corpus-key.hex
+
+# `env-orchestrator harbor package` writes its staging clone and emitted tasks
+# here by default (`harbor doctor` uses harbor-doctor/); a `git add -A` would
+# commit a nested copy of the repo.
+harbor-dist/
+harbor-doctor/

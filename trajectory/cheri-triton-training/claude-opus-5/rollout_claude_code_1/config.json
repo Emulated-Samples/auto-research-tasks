@@ -1,0 +1,17 @@
+{
+    "task": {
+        "path": "tasks/autoresearch-six/ar-cherimoya__problem-cheri-triton-training__cheri-triton-training"
+    },
+    "trial_name": "ar-cherimoya__problem-cheri-trit__QLtcWTZ",
+    "trials_dir": "/home/ubuntu/jobs/ar-opus/ar-cherimoya__problem-cheri-triton-training__cheri-triton-training/2026-08-18__10-14-08",
+    "agent": {
+        "name": "claude-code",
+        "model_name": "claude-opus-5",
+        "extra_allowed_hosts": [
+            "api.anthropic.com",
+            "statsig.anthropic.com",
+            "sentry.io"
+        ]
+    },
+    "job_id": "8fb7f0ce-4f9d-4bd9-85c9-956d99397ef6"
+}

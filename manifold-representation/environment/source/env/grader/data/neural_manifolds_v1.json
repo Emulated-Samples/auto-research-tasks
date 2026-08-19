@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "artifact": "neural_manifolds_v1.npz",
+  "artifact_sha256": "cad81f6df96b29457fe5ce8d1f912c3510a9488b45d6ea21c32a6fa2e947e8a8",
+  "description": "Train-fitted four-dimensional coordinate clouds from public LLM and vision-model activations; source rows are disjoint across benchmark splits.",
+  "reducer": {
+    "algorithm": "deterministic randomized PCA",
+    "chart_dimension": 4,
+    "seed": 20260713,
+    "split_fractions": [
+      0.6,
+      0.2,
+      0.2
+    ],
+    "split_capacities": [
+      512,
+      192,
+      256
+    ],
+    "fit_split": "train only"
+  },
+  "sources": [
+    {
+      "dataset": "scaleinvariant/llama-3.2-1b-instruct-lmsys-chat-1m-activations",
+      "revision": "9682f489707fd078f5ee14730b5f5ce0c7604aed",
+      "license": "cc-by-4.0",
+      "model": "meta-llama/Llama-3.2-1B-Instruct",
+      "source_data": "lmsys/lmsys-chat-1m",
+      "columns": [
+        "residual_4_final",
+        "residual_8_final",
+        "residual_12_final",
+        "residual_15_final"
+      ],
+      "parquet_shards": 20
+    },
+    {
+      "dataset": "mpg-ranch/drone-lsr",
+      "revision": "e8ee1381cd8f0dd81f590884a31816e6ef47069e",
+      "license": "cc-by-4.0",
+      "models": [
+        "facebook/dinov2-base",
+        "facebook/dinov3-vitl16-pretrain-sat493m"
+      ],
+      "source_data": "morning, noon, and afternoon drone imagery of forest plots",
+      "columns": [
+        "dinov2_cls_t0",
+        "dinov2_cls_t1",
+        "dinov2_cls_t2",
+        "dinov3_cls_t0"
+      ],
+      "parquet_files": [
+        "dinov2_base/train-00000-of-00003.parquet",
+        "dinov2_base/train-00001-of-00003.parquet",
+        "dinov2_base/train-00002-of-00003.parquet",
+        "dinov3_sat/train-00000-of-00003.parquet",
+        "dinov3_sat/train-00001-of-00003.parquet",
+        "dinov3_sat/train-00002-of-00003.parquet"
+      ]
+    }
+  ],
+  "families": [
+    {
+      "name": "residual_4_final",
+      "modality": "llm",
+      "source_rows": 909,
+      "stored_rows": {
+        "train": 512,
+        "match": 182,
+        "score": 182
+      },
+      "train_explained_variance": 0.5241544936202932
+    },
+    {
+      "name": "residual_8_final",
+      "modality": "llm",
+      "source_rows": 909,
+      "stored_rows": {
+        "train": 512,
+        "match": 182,
+        "score": 182
+      },
+      "train_explained_variance": 0.3574249662931977
+    },
+    {
+      "name": "residual_12_final",
+      "modality": "llm",
+      "source_rows": 909,
+      "stored_rows": {
+        "train": 512,
+        "match": 182,
+        "score": 182
+      },
+      "train_explained_variance": 0.33566677471859485
+    },
+    {
+      "name": "residual_15_final",
+      "modality": "llm",
+      "source_rows": 909,
+      "stored_rows": {
+        "train": 512,
+        "match": 182,
+        "score": 182
+      },
+      "train_explained_variance": 0.2944065275001529
+    },
+    {
+      "name": "dinov2_cls_t0",
+      "modality": "vision",
+      "source_rows": 487,
+      "stored_rows": {
+        "train": 292,
+        "match": 98,
+        "score": 97
+      },
+      "train_explained_variance": 0.3974093834385661
+    },
+    {
+      "name": "dinov2_cls_t1",
+      "modality": "vision",
+      "source_rows": 487,
+      "stored_rows": {
+        "train": 292,
+        "match": 98,
+        "score": 97
+      },
+      "train_explained_variance": 0.38103648835354526
+    },
+    {
+      "name": "dinov2_cls_t2",
+      "modality": "vision",
+      "source_rows": 487,
+      "stored_rows": {
+        "train": 292,
+        "match": 98,
+        "score": 97
+      },
+      "train_explained_variance": 0.37879768287366333
+    },
+    {
+      "name": "dinov3_cls_t0",
+      "modality": "vision",
+      "source_rows": 487,
+      "stored_rows": {
+        "train": 292,
+        "match": 98,
+        "score": 97
+      },
+      "train_explained_variance": 0.4707216817260506
+    }
+  ],
+  "exclusions": [
+    "model weights",
+    "prompts and conversations",
+    "images",
+    "full-sequence activations",
+    "full-width activation vectors"
+  ]
+}

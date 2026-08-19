@@ -1,0 +1,31 @@
+{
+  "name": "@hyperfocal/env-orchestrator",
+  "version": "0.1.0",
+  "description": "CLI orchestrator for Hyperfocal RL environments",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "env-orchestrator": "./bin/env-orchestrator.js"
+  },
+  "scripts": {
+    "cli": "tsx cli.ts",
+    "build": "tsc",
+    "test": "npm run build && node --test test/*.test.js",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "link": "npm link",
+    "unlink": "npm unlink -g @hyperfocal/env-orchestrator"
+  },
+  "dependencies": {
+    "@hyperfocal/env-base": "file:../env-base",
+    "dotenv": "^16.4.5",
+    "smol-toml": "^1.7.0",
+    "yaml": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
+  }
+}

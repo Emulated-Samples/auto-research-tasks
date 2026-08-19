@@ -1,0 +1,36 @@
+version = "1.0"
+
+[metadata]
+source = "emulated"
+environment = "ar-cherimoya"
+branch = "problem/cheri-triton-training"
+problem_id = "cheri-triton-training"
+difficulty = "hard"
+tags = [ "emulated" ]
+min_replay_score = 0.7
+
+[agent]
+timeout_sec = 86400
+user = "agent"
+# Agent-phase egress is model-API-only; this task's agent phase needs no other host.
+network_mode = "allowlist"
+allowed_hosts = ["api.anthropic.com", "statsig.anthropic.com", "sentry.io", "api.openai.com", "openrouter.ai"]
+
+[verifier]
+network_mode = "no-network"
+timeout_sec = 3600
+user = "root"
+
+[verifier.env]
+[solution.env]
+[environment]
+build_timeout_sec = 2700
+cpus = 4
+memory_mb = 16384
+storage_mb = 20480
+gpus = 1
+gpu_types = [ "L4" ]
+network_mode = "public"
+workdir = "/hyperfocal/env/workspace"
+mcp_servers = []
+

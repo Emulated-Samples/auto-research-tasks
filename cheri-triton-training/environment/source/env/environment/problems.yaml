@@ -1,0 +1,183 @@
+# Problem definitions for ar-cherimoya
+# Each problem has an id, prompt, and optional default flag.
+# YAML is preferred over JSON for readability of multiline prompts.
+#
+# Starting state: whatever setupProblem(problemId) leaves in workspace/ is
+# what the agent wakes up in — it runs during the docker build at package time.
+#
+# Solutions — the ladder (first match wins; later rungs must not coexist):
+#   1. the environment implements solveProblem()   (programmatic solution)
+#   2. the problem declares solutionRef            (git ref whose workspace/ IS the solved state)
+#   3. the problem declares solutionPatch          (committed .patch file)
+#   4. nothing — no solution replay; verification is runnable checks + real agent runs
+
+# ---------------------------------------------------------------------------
+# gpu-diagnostics — NOT a training problem.
+#
+# A measurement harness wearing a problem's clothes. It exists because this env
+# is authored on a CPU-only box (dev_container is a CPU-only surface across the
+# whole compute catalog) while the subject is a Triton kernel, and the
+# `--cloud modal` dev loop is blocked on Node>=22 + a Modal token. Launching a
+# real run is the only GPU we can reach today.
+#
+# The agent phase is deliberately a no-op: all the work is in runTests(), which
+# measures gold and prints numbers. Every test reports rather than gates —
+# weight 0 — so this run's score is meaningless by construction. The payload is
+# the captured stdout, read back with:
+#     hyperfocal run tests <run-id>
+#     hyperfocal run pull <run-id> --only tests
+#
+# Answers env-docs/04-gpu-port-plan.md section 7:
+#   1. the true fp32/bf16/fp16 drift  (the 1e-4 vs 1e-2 contradiction)
+#   2. whether the training autotune sweep is dead
+#   4. whether benchmarks.rst is reproducible at all
+#
+# DELETE once the Modal dev loop works. This is scaffolding, not the task.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# cheri-triton-kernel — THE task. Iteration 1: inference kernel only.
+# Workspace starts ablated (this branch); agent implements a fused no_grad Triton
+# forward. Graded by environment/assets/grade_inference.py (hidden). See
+# env-docs/07-iteration-1-inference.md.
+#
+# solutionRef points at gold (main): the harness checks out gold's workspace/
+# (which HAS the kernels) and replays it through this branch's grader to validate
+# the reward surface. Gold's inference megakernel should score high.
+# minReplayScore set below gold's measured replay score once calibrated.
+# ---------------------------------------------------------------------------
+- id: cheri-triton-kernel
+  prompt: |
+    # Make the Cheri Block fast on GPU with Triton (inference)
+
+    ## Background
+    Cherimoya is a compact sequence-to-function model for genomics. Its backbone
+    is a stack of **Cheri Blocks** (`cherimoya/cheri.py`). On an input of shape
+    `(N, L, C)`, each block mixes information along the sequence and across
+    channels. The block currently runs as plain PyTorch on every device, which
+    is slow on GPU. The pure-PyTorch `CheriBlock` in `cheri.py` is the reference
+    and the source of truth for the numerics — read it for the exact operations,
+    shapes, and constants.
+
+    ## Your task
+    Make the Cheri block fast on CUDA at inference time (disabled gradients). That is, when
+    `torch.is_grad_enabled()` is False and the input is a CUDA tensor, run the
+    whole block through hand-written triton kernel and make it fast. The CPU path, and the CUDA path *with*
+    gradients enabled, must keep using the existing PyTorch code unchanged.
+
+    You can choose the kernel design. You are not asked for a differentiable kernel or backwards pass in this task.
+
+    ## Requirements
+    - Preserve the block's public behavior, constructor signature, parameter
+      layout, and output semantics.
+    - Ensure the existing paths stay correct.
+    - **Accuracy** (graded vs the pure-PyTorch reference, over many shapes and dtypes):
+      - fp32 input: forward max-abs error ≤ `2e-4`
+      - bf16 input: ≤ `2e-2`   ·   fp16 input: ≤ `5e-3`
+      A correct fp32 kernel matches to ~1e-6; the budget lets you optionally
+      trade precision (e.g. reduced-precision matmuls) for speed.
+    - **Performance**: the `no_grad` CUDA forward must be substantially faster
+      than the current PyTorch block on the same GPU, at the model's working size
+      (`N` up to 512, `L=2114`, `C=128`, dilations `1..256`, fp32 and bf16).
+
+    ## Constraints
+    - Do **not** use `torch.compile`, `torch.jit`, or `torch.fx`. Your CUDA path must launch real `@triton.jit` kernels.
+    - Work in `cherimoya/cheri.py`.
+
+    ## Checking your work
+    Run the block on a CUDA tensor under `torch.no_grad()` and compare against the
+    same block on CPU (the reference) for correctness as you iterate.
+
+    
+  solutionRef: main
+  minReplayScore: 0.8   # gold replays at 0.995 on L4 (run_019f7157); 0.8 = margin
+
+# ---------------------------------------------------------------------------
+# cheri-triton-training — THE task, iteration 2: the DIFFERENTIABLE training path.
+# Same ablated pure-PyTorch starting workspace as iteration 1, but here the agent
+# accelerates the GRAD-ENABLED CUDA forward+backward, not the no_grad forward. The
+# kernel must be a real autograd.Function (hand-written Triton fwd+bwd for the
+# conv+norm; the MLP may stay PyTorch, as gold does) that keeps gradients correct.
+#
+# Graded by environment/assets/grade_training.py (hidden): grad-enabled forward
+# parity + BACKWARD parity vs an independent autograd reference (dx, conv-weight,
+# and both linear grads) across a randomized grid, plus fwd+bwd speedup anchored
+# on LIVE gold. Correctness (forward+backward) gates perf. See
+# env-docs/08-iteration-2-training.md.
+#
+# solutionRef: gold/tuned — gold's training path (FusedDilatedConvNormFunc)
+# with the autotune bug fixed, replayed through this grader to validate the reward
+# surface. This is a dedicated gold branch (gold + f299cfe) rather than `main`:
+# origin/main is still pristine gold with the collapsed autotune, and iteration 1's
+# QA depends on it being unchanged, so we do NOT mutate shared main. The gold
+# fixture used as the live perf anchor is a verbatim copy of this same tuned gold,
+# so gold replays at ~1.0 (its ratio ~= the anchor). minReplayScore below that.
+# NOTE: FLOOR / GOLD_FALLBACK / GAMMA in the grader are seeded from L4 diagnostics
+# and want one calibration run on the rollout GPU to finalize (as iteration 1's
+# anchors were calibrated over several rollouts).
+# ---------------------------------------------------------------------------
+- id: cheri-triton-training
+  default: true
+  prompt: |
+    # Make the Cheri Block fast on GPU with Triton (training: forward + backward)
+
+    ## Background
+    Cherimoya is a compact sequence-to-function model for genomics. Its backbone
+    is a stack of **Cheri Blocks** (`cherimoya/cheri.py`). On an input of shape
+    `(N, L, C)`, each block mixes information along the sequence and across
+    channels. The block currently runs as plain PyTorch on every device, which
+    is slow on GPU. The pure-PyTorch `CheriBlock` in `cheri.py` is the reference
+    and the source of truth for the numerics — read it for the exact operations,
+    shapes, and constants.
+
+    ## Your task
+    Make the Cheri block fast on CUDA **during training** — that is, when
+    `torch.is_grad_enabled()` is True and the input is a CUDA tensor. Run the
+    block's expensive spatial mixing (the 3-tap dilated depthwise convolution
+    fused with the per-example layer norm) through a hand-written Triton kernel,
+    and make the **forward and backward** fast, **without changing the gradients**
+    the block produces.
+
+    Because the path must be differentiable, wrap your Triton forward and backward
+    in a `torch.autograd.Function`. You may leave the channel-mixing MLP (the two
+    linears + GELU + scaled residual) as ordinary PyTorch — autograd will handle
+    it — or fuse more of it if you wish. The CPU path, and the CUDA path when
+    gradients are disabled, must keep using the existing PyTorch code unchanged
+    (the no_grad inference path is not what this task grades).
+
+    You choose the kernel design. The one hard requirement is that the training
+    path stays a correct autograd node: every gradient the block produced before
+    (w.r.t. the input and w.r.t. every parameter) must still be produced, and
+    still be correct.
+
+    ## Requirements
+    - Preserve the block's public behavior, constructor signature, parameter
+      layout, and output semantics.
+    - Ensure the existing paths (CPU, and CUDA no_grad) stay correct.
+    - **Forward accuracy** (grad-enabled, graded vs the pure-PyTorch reference,
+      over many shapes and dtypes):
+      - fp32 input: forward max-abs error ≤ `2e-4`
+      - bf16 input: ≤ `2e-2`   ·   fp16 input: ≤ `5e-3`
+    - **Backward accuracy** — the gradients from your training path must match
+      autograd of the reference block. Graded as a relative error per gradient
+      tensor (input, conv weight, and both linear weights): ≤ `3e-3` (fp32),
+      with looser budgets in reduced precision. A dropped or miscomputed gradient
+      term fails this.
+    - **Performance**: the grad-enabled CUDA **forward+backward** must be
+      substantially faster than the current PyTorch block on the same GPU, at the
+      model's working size (`N` up to 512, `L=2114`, `C=128`, dilations `1..256`,
+      fp32 and bf16). The training regime is harder to speed up than inference —
+      the backward dominates — so a real, honest speedup is what earns marks.
+
+    ## Constraints
+    - Do **not** use `torch.compile`, `torch.jit`, or `torch.fx`. Your CUDA path
+      must launch real `@triton.jit` kernels.
+    - Work in `cherimoya/cheri.py`.
+
+    ## Checking your work
+    Run the block on a CUDA tensor with gradients enabled, call `.backward()`, and
+    compare both the output and the gradients (`x.grad`, and each parameter's
+    `.grad`) against the same block run on CPU (the reference). Both should agree.
+
+  solutionRef: gold/tuned
+  minReplayScore: 0.7   # full marks = 1.1x live gold, so gold-replay scores ~0.85; 0.7 = margin
